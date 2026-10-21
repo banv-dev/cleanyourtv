@@ -14,18 +14,24 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
 
     private final int dockSize;
     private final float density;
+    private final boolean transparent;
     private final Paint band = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF rect = new RectF();
 
     /** @param translucent the cinematic shelf's band: the artwork and the glow show through it. */
     DockDecoration(int dockSize, float density, boolean translucent) {
+        this(dockSize, density, translucent, false);
+    }
+
+    DockDecoration(int dockSize, float density, boolean translucent, boolean transparent) {
         this.dockSize = dockSize;
         this.density = density;
-        band.setColor(translucent ? 0x8C121014 : 0xFF141416);
+        this.transparent = transparent;
+        band.setColor(transparent ? 0 : (translucent ? 0x8C121014 : 0xFF141416));
         edge.setStyle(Paint.Style.STROKE);
         edge.setStrokeWidth(density);
-        edge.setColor(translucent ? 0x26FFFFFF : 0x1FFFFFFF);
+        edge.setColor(transparent ? 0 : (translucent ? 0x26FFFFFF : 0x1FFFFFFF));
     }
 
     @Override
@@ -40,6 +46,7 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
 
     @Override
     public void onDraw(@NonNull Canvas c, @NonNull RecyclerView parent, @NonNull RecyclerView.State state) {
+        if (transparent) return;
         boolean any = false;
         for (int i = 0; i < parent.getChildCount(); i++) {
             View child = parent.getChildAt(i);
