@@ -34,6 +34,14 @@
             android:gravity="center_vertical"
             android:duplicateParentState="true">
 
+            <View
+                android:id="@+id/unreadDot"
+                android:layout_width="7dp"
+                android:layout_height="7dp"
+                android:layout_marginEnd="7dp"
+                android:background="@drawable/status_dot"
+                android:visibility="gone" />
+
             <TextView
                 android:id="@+id/title"
                 android:layout_width="0dp"
@@ -68,8 +76,7 @@
             android:duplicateParentState="true"
             android:textSize="12sp"
             android:fontFamily="@font/outfit"
-            android:maxLines="3"
+            android:maxLines="2"
             android:ellipsize="end" />
     </LinearLayout>
 </LinearLayout>
-

@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import android.service.notification.NotificationListenerService;
@@ -13,11 +14,14 @@ import android.text.TextUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Listens for system notifications and forwards them to MainActivity so the launcher can
- * show the latest notification, a notification-bell icon in the top bar, and the notification list popup.
+ * show the latest unread notification, an unread count badge on the notification-bell icon
+ * in the top bar, and the notification list / detail views.
  *
  * <p>Enable it once via adb (or the user grants it in Settings → Apps → Special app access
  * → Notification access) and the service stays connected across reboots.
@@ -27,32 +31,39 @@ public class NotificationService extends NotificationListenerService {
     /** Broadcast action sent to MainActivity when the notification list changes. */
     static final String ACTION_NOTIFICATIONS_CHANGED = "com.gathin.tvhome.action.NOTIFICATIONS_CHANGED";
 
-    /** Key for the extra that carries the latest notification text (title + body). */
+    /** Key for the extra that carries the latest unread notification text (title + body). */
     static final String EXTRA_LATEST_TEXT = "latest_text";
-    /** Key for the extra that carries the latest notification package name. */
+    /** Key for the extra that carries the latest unread notification package name. */
     static final String EXTRA_LATEST_PKG = "latest_pkg";
     /** Key for the extra that carries the unread notification count. */
     static final String EXTRA_COUNT = "count";
 
-    /** Snapshot of a visible notification for the launcher's notification list popup. */
+    private static final String PREFS_READ = "notification_reads";
+    private static final String KEY_READ_IDS = "read_ids";
+
+    /** Snapshot of a visible notification for the launcher's notification list and detail dialog. */
     static final class Item {
         final String key;
+        final String readId;
         final String pkg;
         final String title;
         final String text;
         final long postTime;
         final PendingIntent contentIntent;
         final boolean clearable;
+        final boolean unread;
 
-        Item(String key, String pkg, String title, String text,
-             long postTime, PendingIntent contentIntent, boolean clearable) {
+        Item(String key, String readId, String pkg, String title, String text,
+             long postTime, PendingIntent contentIntent, boolean clearable, boolean unread) {
             this.key = key;
+            this.readId = readId;
             this.pkg = pkg;
             this.title = title;
             this.text = text;
             this.postTime = postTime;
             this.contentIntent = contentIntent;
             this.clearable = clearable;
+            this.unread = unread;
         }
     }
 
@@ -106,6 +117,10 @@ public class NotificationService extends NotificationListenerService {
 
     // ---- helpers -------------------------------------------------------------------------------
 
+    private static SharedPreferences readPrefs(Context ctx) {
+        return ctx.getSharedPreferences(PREFS_READ, Context.MODE_PRIVATE);
+    }
+
     /** Collects the current visible notifications, updates the cache, and returns the list. */
     private List<Item> collectVisible() {
         try {
@@ -123,6 +138,10 @@ public class NotificationService extends NotificationListenerService {
 
             // Sort newest first (postTime descending)
             visible.sort((a, b) -> Long.compare(b.getPostTime(), a.getPostTime()));
+
+            SharedPreferences prefs = readPrefs(this);
+            Set<String> storedRead = prefs.getStringSet(KEY_READ_IDS, Collections.emptySet());
+            Set<String> activeRead = new HashSet<>();
 
             List<Item> items = new ArrayList<>(visible.size());
             for (StatusBarNotification sbn : visible) {
@@ -152,14 +171,23 @@ public class NotificationService extends NotificationListenerService {
                 if (pi == null && n.actions != null && n.actions.length > 0) {
                     pi = n.actions[0].actionIntent;
                 }
+                String readId = sbn.getKey() + "@" + sbn.getPostTime();
+                boolean isRead = storedRead.contains(readId);
+                if (isRead) activeRead.add(readId);
+
                 items.add(new Item(
                         sbn.getKey(),
+                        readId,
                         sbn.getPackageName(),
                         title,
                         text,
                         sbn.getPostTime(),
                         pi,
-                        sbn.isClearable()));
+                        sbn.isClearable(),
+                        !isRead));
+            }
+            if ( activeRead.size() != storedRead.size()) {
+                prefs.edit().putStringSet(KEY_READ_IDS, activeRead).apply();
             }
             cachedItems = Collections.unmodifiableList(items);
             return cachedItems;
@@ -172,23 +200,31 @@ public class NotificationService extends NotificationListenerService {
     private void broadcast() {
         try {
             List<Item> items = collectVisible();
+            int unreadCount = 0;
+            Item latestUnread = null;
+            for (Item item : items) {
+                if (item.unread) {
+                    unreadCount++;
+                    if (latestUnread == null) latestUnread = item;
+                }
+            }
+
             String latestText = "";
             String latestPkg = "";
-            if (!items.isEmpty()) {
-                Item top = items.get(0);
-                latestPkg = top.pkg;
-                if (!top.title.isEmpty() && !top.text.isEmpty()) {
-                    latestText = top.title + ": " + top.text;
-                } else if (!top.title.isEmpty()) {
-                    latestText = top.title;
+            if (latestUnread != null) {
+                latestPkg = latestUnread.pkg;
+                if (!latestUnread.title.isEmpty() && !latestUnread.text.isEmpty()) {
+                    latestText = latestUnread.title + ": " + latestUnread.text;
+                } else if (!latestUnread.title.isEmpty()) {
+                    latestText = latestUnread.title;
                 } else {
-                    latestText = top.text;
+                    latestText = latestUnread.text;
                 }
             }
 
             Intent intent = new Intent(ACTION_NOTIFICATIONS_CHANGED);
             intent.setPackage(getPackageName());
-            intent.putExtra(EXTRA_COUNT, items.size());
+            intent.putExtra(EXTRA_COUNT, unreadCount);
             intent.putExtra(EXTRA_LATEST_TEXT, latestText);
             intent.putExtra(EXTRA_LATEST_PKG, latestPkg);
             sendBroadcast(intent);
@@ -220,6 +256,33 @@ public class NotificationService extends NotificationListenerService {
             }
         }
         return cachedItems;
+    }
+
+    /** Marks a single notification as read and refreshes the unread count. */
+    static void markRead(Context ctx, Item item) {
+        if (item == null || !item.unread) return;
+        SharedPreferences prefs = readPrefs(ctx);
+        Set<String> next = new HashSet<>(prefs.getStringSet(KEY_READ_IDS, Collections.emptySet()));
+        if (next.add(item.readId)) {
+            prefs.edit().putStringSet(KEY_READ_IDS, next).apply();
+        }
+        refresh(ctx);
+    }
+
+    /** Marks all current notifications as read and refreshes the unread count. */
+    static void markAllRead(Context ctx) {
+        List<Item> current = getNotifications(ctx);
+        if (current.isEmpty()) return;
+        SharedPreferences prefs = readPrefs(ctx);
+        Set<String> next = new HashSet<>(prefs.getStringSet(KEY_READ_IDS, Collections.emptySet()));
+        boolean changed = false;
+        for (Item item : current) {
+            if (next.add(item.readId)) changed = true;
+        }
+        if (changed) {
+            prefs.edit().putStringSet(KEY_READ_IDS, next).apply();
+        }
+        refresh(ctx);
     }
 
     /** Triggers a broadcast refresh (or requests a rebind if enabled but not yet connected). */

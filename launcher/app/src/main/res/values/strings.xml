@@ -4,7 +4,10 @@
     <string name="search">Search</string>
     <string name="notifications">Notifications</string>
     <string name="no_notifications">No notifications</string>
+    <string name="mark_all_read">Mark all as read</string>
     <string name="clear_notifications">Clear all</string>
+    <string name="notification_dismiss">Dismiss</string>
+    <string name="notification_close">Close</string>
     <string name="notification_listener_hint">Grant Notification access to CleanYourTV in Settings → Apps → Special app access → Notification access.</string>
     <string name="inputs">Inputs</string>
     <string name="wifi">Wi-Fi</string>

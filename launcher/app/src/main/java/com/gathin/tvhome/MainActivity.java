@@ -218,9 +218,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private View btnSearch;
     private TextView btnNotifications;
     private TextView notificationBanner;
+    private Dialog notificationDetailDialog;
     /** True when the NotificationService is connected and has delivered at least one update. */
     private boolean notificationListenerEnabled;
-    /** The latest notification count (0 = none); drives the bell icon state. */
+    /** The latest unread notification count (0 = none); drives the bell icon and count badge. */
     private int notificationCount;
     /** Text of the most-recent notification shown on the banner row below the clock. */
     private String latestNotificationText = "";
@@ -769,6 +770,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         cancelPendingFocusScroll();
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
+        if (notificationDetailDialog != null) notificationDetailDialog.dismiss();
         if (appLibrary != null) appLibrary.close();
         if (openPopup != null) openPopup.dismiss();
     }
@@ -2597,7 +2599,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /**
      * Opens the notification list dropdown under the notification bell pill.
      * Shows active notifications from {@link NotificationService} (or a prompt to enable
-     * notification access if not yet granted).
+     * notification access if not yet granted). Clicking a notification marks it as read and
+     * opens its full detail view.
      */
     private void openNotificationCenter() {
         notificationListenerEnabled = NotificationService.isEnabled(this);
@@ -2630,18 +2633,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             rows.addView(row);
         } else {
             List<NotificationService.Item> items = NotificationService.getNotifications(this);
-            notificationCount = items.size();
+            int unreadCount = 0;
+            for (NotificationService.Item item : items) {
+                if (item.unread) unreadCount++;
+            }
+            notificationCount = unreadCount;
             updateNotificationUi();
 
             if (items.isEmpty()) {
                 addSettingsMenuRow(rows, popup, R.string.no_notifications, () -> {});
             } else {
                 boolean hasClearable = false;
+                boolean hasUnread = unreadCount > 0;
                 android.content.pm.PackageManager pm = getPackageManager();
                 for (NotificationService.Item item : items) {
                     if (item.clearable) hasClearable = true;
                     View row = getLayoutInflater().inflate(R.layout.item_notification, rows, false);
                     ImageView iconView = row.findViewById(R.id.icon);
+                    View unreadDot = row.findViewById(R.id.unreadDot);
                     TextView titleView = row.findViewById(R.id.title);
                     TextView timeView = row.findViewById(R.id.time);
                     TextView textView = row.findViewById(R.id.text);
@@ -2663,6 +2672,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                         iconView.setDuplicateParentStateEnabled(true);
                     }
 
+                    unreadDot.setVisibility(item.unread ? View.VISIBLE : View.GONE);
+                    titleView.setTextColor(getColorStateList(
+                            item.unread ? R.drawable.pill_text : R.drawable.pill_text_mid));
+
                     String title = !item.title.isEmpty() ? item.title : appName;
                     String body = !item.text.isEmpty() ? item.text : (!item.title.isEmpty() ? appName : "");
                     titleView.setText(title);
@@ -2677,9 +2690,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                         timeView.setVisibility(View.GONE);
                     }
 
+                    final String resolvedAppName = appName;
+                    final Drawable resolvedAppIcon = appIcon;
                     row.setOnClickListener(v -> {
+                        NotificationService.markRead(this, item);
                         popup.dismiss();
-                        activateNotification(item);
+                        showNotificationDetail(item, resolvedAppName, resolvedAppIcon);
                     });
                     if (item.clearable) {
                         row.setOnLongClickListener(v -> {
@@ -2690,9 +2706,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     }
                     rows.addView(row);
                 }
-                if (hasClearable) {
+                if (hasUnread || hasClearable) {
                     addSeparator(rows);
-                    addSettingsMenuRow(rows, popup, R.string.clear_notifications, NotificationService::dismissAll);
+                    if (hasUnread) {
+                        addSettingsMenuRow(rows, popup, R.string.mark_all_read,
+                                () -> NotificationService.markAllRead(this));
+                    }
+                    if (hasClearable) {
+                        addSettingsMenuRow(rows, popup, R.string.clear_notifications,
+                                NotificationService::dismissAll);
+                    }
                 }
             }
         }
@@ -2706,6 +2729,121 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         int alignment = getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.START : Gravity.END;
         dropIn(popup, panel, anchor, alignment);
         if (rows.getChildCount() > 0) rows.getChildAt(0).requestFocus();
+    }
+
+    /**
+     * Shows the full content of a single notification in a glass dialog.
+     * Pressing Close or Back returns to the notification list; Open launches the notification's
+     * target intent/app; Dismiss removes the notification and returns to the list.
+     */
+    private void showNotificationDetail(NotificationService.Item item, String appName, Drawable appIcon) {
+        if (notificationDetailDialog != null) notificationDetailDialog.dismiss();
+
+        View panel = getLayoutInflater().inflate(R.layout.dialog_notification_detail, root, false);
+        ImageView iconView = panel.findViewById(R.id.icon);
+        if (appIcon != null) {
+            iconView.setImageDrawable(appIcon);
+        } else {
+            iconView.setImageResource(R.drawable.ic_notifications);
+        }
+        ((TextView) panel.findViewById(R.id.appName)).setText(appName);
+
+        TextView timeView = panel.findViewById(R.id.time);
+        if (item.postTime > 0) {
+            timeView.setText(android.text.format.DateUtils.formatDateTime(this, item.postTime,
+                    android.text.format.DateUtils.FORMAT_SHOW_DATE
+                            | android.text.format.DateUtils.FORMAT_SHOW_TIME
+                            | android.text.format.DateUtils.FORMAT_ABBREV_ALL));
+        } else {
+            timeView.setVisibility(View.GONE);
+        }
+
+        TextView titleView = panel.findViewById(R.id.title);
+        String title = !item.title.isEmpty() ? item.title : appName;
+        titleView.setText(title);
+
+        android.widget.ScrollView bodyScroll = panel.findViewById(R.id.bodyScroll);
+        TextView bodyView = panel.findViewById(R.id.body);
+        if (!item.text.isEmpty()) {
+            bodyView.setText(item.text);
+        } else {
+            bodyScroll.setVisibility(View.GONE);
+        }
+
+        TextView btnDismiss = panel.findViewById(R.id.btnDismiss);
+        TextView btnOpen = panel.findViewById(R.id.btnOpen);
+        TextView btnClose = panel.findViewById(R.id.btnClose);
+
+        final Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(panel);
+        dialog.setCanceledOnTouchOutside(true);
+        Window w = dialog.getWindow();
+        if (w != null) {
+            w.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            w.setLayout((int) (500 * density), ViewGroup.LayoutParams.WRAP_CONTENT);
+            w.setDimAmount(0.6f);
+        }
+
+        boolean canOpen = canActivateNotification(item);
+        if (canOpen) {
+            btnOpen.setVisibility(View.VISIBLE);
+            btnOpen.setOnClickListener(v -> {
+                notificationDetailDialog = null;
+                dialog.dismiss();
+                activateNotification(item);
+            });
+        }
+        if (item.clearable) {
+            btnDismiss.setVisibility(View.VISIBLE);
+            btnDismiss.setOnClickListener(v -> {
+                notificationDetailDialog = null;
+                dialog.dismiss();
+                NotificationService.dismiss(item.key);
+                handler.post(this::openNotificationCenter);
+            });
+        }
+        btnClose.setOnClickListener(v -> {
+            notificationDetailDialog = null;
+            dialog.dismiss();
+            openNotificationCenter();
+        });
+        dialog.setOnCancelListener(d -> {
+            notificationDetailDialog = null;
+            openNotificationCenter();
+        });
+        dialog.setOnDismissListener(d -> {
+            if (notificationDetailDialog == dialog) notificationDetailDialog = null;
+        });
+
+        final View firstBtn = item.clearable ? btnDismiss : (canOpen ? btnOpen : btnClose);
+        View.OnKeyListener keys = (v, keyCode, event) -> {
+            if (event.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+                bodyScroll.smoothScrollBy(0, -(int) (60 * density));
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
+                bodyScroll.smoothScrollBy(0, (int) (60 * density));
+                return true;
+            }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return v == firstBtn;
+            return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v == btnClose;
+        };
+        btnDismiss.setOnKeyListener(keys);
+        btnOpen.setOnKeyListener(keys);
+        btnClose.setOnKeyListener(keys);
+
+        notificationDetailDialog = dialog;
+        dialog.show();
+        btnClose.requestFocus();
+    }
+
+    private boolean canActivateNotification(NotificationService.Item item) {
+        if (item.contentIntent != null) return true;
+        if (item.pkg == null || item.pkg.isEmpty() || "android".equals(item.pkg)) return false;
+        return getPackageManager().getLeanbackLaunchIntentForPackage(item.pkg) != null
+                || getPackageManager().getLaunchIntentForPackage(item.pkg) != null;
     }
 
     private void activateNotification(NotificationService.Item item) {
@@ -2729,31 +2867,45 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(item.pkg);
             if (launch != null) {
                 open(launch);
-                launched = true;
             }
-        }
-        if (item.clearable) {
-            NotificationService.dismiss(item.key);
         }
     }
 
     /**
-     * Refreshes the notification bell icon and the banner text under the clock from the current
-     * {@code notificationCount} and {@code latestNotificationText}.
-     * Called both on the broadcast from {@link NotificationService} and on each onStart
-     * (to sync state when the listener was just granted or revoked).
+     * Refreshes the notification bell icon, the unread count on the bell button, and the banner
+     * text under the clock from the current {@code notificationCount} and {@code latestNotificationText}.
      */
     private void updateNotificationUi() {
         if (btnNotifications == null || notificationBanner == null) return;
 
-        // Bell icon: active (red dot) when there are unread notifications, plain bell otherwise.
-        boolean hasNotifications = notificationListenerEnabled && notificationCount > 0;
+        // Bell icon + unread count when there are unread notifications, plain circular bell otherwise.
+        boolean hasUnread = notificationListenerEnabled && notificationCount > 0;
         btnNotifications.setCompoundDrawablesRelativeWithIntrinsicBounds(
-                hasNotifications ? R.drawable.ic_notifications_active : R.drawable.ic_notifications,
+                hasUnread ? R.drawable.ic_notifications_active : R.drawable.ic_notifications,
                 0, 0, 0);
+        ViewGroup.LayoutParams lp = btnNotifications.getLayoutParams();
+        if (hasUnread) {
+            String countText = notificationCount > 99 ? "99+" : String.valueOf(notificationCount);
+            btnNotifications.setText(countText);
+            btnNotifications.setCompoundDrawablePadding((int) (6 * density));
+            btnNotifications.setPaddingRelative((int) (13 * density), 0, (int) (15 * density), 0);
+            if (lp != null && lp.width != ViewGroup.LayoutParams.WRAP_CONTENT) {
+                lp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                btnNotifications.setLayoutParams(lp);
+            }
+        } else {
+            btnNotifications.setText("");
+            btnNotifications.setCompoundDrawablePadding(0);
+            btnNotifications.setPaddingRelative((int) (10 * density), 0, (int) (10 * density), 0);
+            int circleW = (int) (42 * density);
+            if (lp != null && lp.width != circleW) {
+                lp.width = circleW;
+                btnNotifications.setLayoutParams(lp);
+            }
+        }
 
-        // Notification banner below the clock.
-        if (hasNotifications && !latestNotificationText.isEmpty()) {
+        // Notification banner below the clock (shows the latest unread notification).
+        if (hasUnread && !latestNotificationText.isEmpty()) {
             notificationBanner.setText(latestNotificationText);
             notificationBanner.setVisibility(View.VISIBLE);
         } else {
