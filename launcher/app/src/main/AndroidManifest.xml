@@ -134,5 +134,19 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/input_key_service" />
         </service>
+
+        <!-- Notification listener: shows the latest notification on the launcher and drives the
+             bell icon. Grant access via Settings → Apps → Special app access → Notification access,
+             or with `pm grant com.gathin.tvhome android.permission.BIND_NOTIFICATION_LISTENER_SERVICE`
+             through ADB (requires system or root on most TVs; use the Settings path instead). -->
+        <service
+            android:name=".NotificationService"
+            android:exported="true"
+            android:label="@string/notifications"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

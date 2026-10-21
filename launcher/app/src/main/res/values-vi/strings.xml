@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Màn hình chính</string>
+    <string name="search">Tìm kiếm</string>
+    <string name="notifications">Thông báo</string>
+    <string name="no_notifications">Không có thông báo</string>
+    <string name="clear_notifications">Xóa tất cả</string>
+    <string name="notification_listener_hint">Hãy cấp quyền Truy cập thông báo trong Cài đặt → Ứng dụng → Quyền truy cập đặc biệt → Truy cập thông báo.</string>
     <string name="inputs">Nguồn vào</string>
     <string name="wifi">Wi-Fi</string>
     <string name="settings">Cài đặt</string>

@@ -275,6 +275,27 @@
 
             </LinearLayout>
 
+            <!-- Notification banner: shows the latest notification text below the clock; gone when empty. -->
+            <TextView
+                android:id="@+id/notificationBanner"
+                android:layout_width="0dp"
+                android:layout_below="@id/leftBlock"
+                android:layout_alignStart="@id/leftBlock"
+                android:layout_toStartOf="@+id/topButtons"
+                android:layout_marginEnd="16dp"
+                android:gravity="left"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="#CCffffff"
+                android:textSize="13sp"
+                android:fontFamily="@font/outfit_regular"
+                android:letterSpacing="0.02"
+                android:focusable="false"
+                android:drawablePadding="6dp"
+                android:visibility="gone" />
+
             <!-- Shown only when show_stats is on. Outside leftBlock, so the top buttons stay level with the clock
                  row; gone, it takes no space. -->
             <TextView
@@ -306,6 +327,14 @@
                 android:clipToPadding="false"
                 android:orientation="horizontal">
 
+                <!-- Google Assistant / Search button -->
+                <TextView
+                    android:id="@+id/btnSearch"
+                    style="@style/TopButton"
+                    android:text="@string/search"
+                    android:drawableStart="@drawable/ic_search"
+                    android:nextFocusDown="@+id/grid" />
+
                 <TextView
                     android:id="@+id/btnInputs"
                     style="@style/TopButton"
@@ -321,6 +350,14 @@
                     android:ellipsize="end"
                     android:text="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
+                    android:nextFocusDown="@+id/grid" />
+
+                <!-- Notification bell button -->
+                <TextView
+                    android:id="@+id/btnNotifications"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/notifications"
+                    android:drawableStart="@drawable/ic_notifications"
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView

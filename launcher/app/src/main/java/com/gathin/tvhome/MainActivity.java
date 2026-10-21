@@ -214,6 +214,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean libraryFocusPending;
     private RecyclerView.OnScrollListener pendingFocusScroll;
 
+    // ---- search + notification additions --------------------------------------------------------
+    private View btnSearch;
+    private TextView btnNotifications;
+    private TextView notificationBanner;
+    /** True when the NotificationService is connected and has delivered at least one update. */
+    private boolean notificationListenerEnabled;
+    /** The latest notification count (0 = none); drives the bell icon state. */
+    private int notificationCount;
+    /** Text of the most-recent notification shown on the banner row below the clock. */
+    private String latestNotificationText = "";
+    /** Receives updates from {@link NotificationService}. */
+    private final BroadcastReceiver notificationReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            notificationCount = intent.getIntExtra(NotificationService.EXTRA_COUNT, 0);
+            latestNotificationText = intent.getStringExtra(NotificationService.EXTRA_LATEST_TEXT);
+            if (latestNotificationText == null) latestNotificationText = "";
+            updateNotificationUi();
+        }
+    };
+    private final IntentFilter notificationFilter =
+            new IntentFilter(NotificationService.ACTION_NOTIFICATIONS_CHANGED);
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
@@ -489,6 +512,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
 
+        // Search (Google Assistant) button.
+        btnSearch = findViewById(R.id.btnSearch);
+        btnSearch.setOnClickListener(v -> openGoogleAssistant());
+
+        // Notification bell button.
+        btnNotifications = findViewById(R.id.btnNotifications);
+        btnNotifications.setOnClickListener(v -> openNotificationCenter());
+
+        // Notification banner (below the clock, showing the latest notification text).
+        notificationBanner = findViewById(R.id.notificationBanner);
+
         btnInputs = findViewById(R.id.btnInputs);
         View btnSettings = findViewById(R.id.btnSettings);
         btnInputs.setOnClickListener(v -> showInputs());
@@ -517,18 +551,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }
-            int firstButton = btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : R.id.btnWifi;
+            int firstButton = btnSearch.getVisibility() == View.VISIBLE ? R.id.btnSearch
+                    : (btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : R.id.btnWifi);
             int leftButton = rtlMenuBar ? R.id.btnSettings : firstButton;
             int rightButton = rtlMenuBar ? firstButton : R.id.btnSettings;
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return v.getId() == leftButton;
             return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == rightButton;
         };
+        btnSearch.setOnKeyListener(pillKeys);
         btnInputs.setOnKeyListener(pillKeys);
         btnWifi.setOnKeyListener(pillKeys);
+        btnNotifications.setOnKeyListener(pillKeys);
         btnSettings.setOnKeyListener(pillKeys);
         btnReorder.setOnKeyListener(pillKeys);
         if (advancedEffects) {
-            for (View button : new View[]{btnInputs, btnWifi, btnReorder, btnSettings}) {
+            for (View button : new View[]{btnSearch, btnInputs, btnWifi, btnNotifications, btnReorder, btnSettings}) {
                 button.setOnFocusChangeListener((view, focused) -> view.animate()
                         .scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
                         .setDuration(160).start());
@@ -591,10 +628,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(packageReceiver, packageFilter, Context.RECEIVER_NOT_EXPORTED);
             registerReceiver(timeReceiver, timeFilter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(notificationReceiver, notificationFilter, Context.RECEIVER_NOT_EXPORTED);
         } else {
             registerReceiver(packageReceiver, packageFilter);
             registerReceiver(timeReceiver, timeFilter);
+            registerReceiver(notificationReceiver, notificationFilter);
         }
+        notificationListenerEnabled = NotificationService.isEnabled(this);
+        NotificationService.refresh(this);
+        updateNotificationUi();
         updateClockVisibility();
     }
 
@@ -736,6 +778,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onStop();
         unregisterReceiver(packageReceiver);
         unregisterReceiver(timeReceiver);
+        try { unregisterReceiver(notificationReceiver); } catch (IllegalArgumentException ignored) {}
         handler.removeCallbacks(clockCheck);
         rebuildOnResume = true;
     }
@@ -2509,6 +2552,212 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 return getString(R.string.card_state_new_label);
             default:
                 return getString(R.string.card_state_new);
+        }
+    }
+
+    // ---- search & notifications ------------------------------------------------------------------
+
+    /**
+     * Opens Google Assistant voice search, the same as the mic button on the Google TV remote.
+     * Tries the voice search intent first; falls back to the text search activity on TVs that do
+     * not have Assistant installed (pure Android TV devices, some older firmware).
+     */
+    private void openGoogleAssistant() {
+        // Standard Google Assistant voice trigger (works on Google TV and Android TV with Assistant)
+        Intent voice = new Intent(Intent.ACTION_VOICE_COMMAND);
+        voice.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (voice.resolveActivity(getPackageManager()) != null) {
+            try {
+                startActivity(voice);
+                return;
+            } catch (ActivityNotFoundException ignored) {
+            }
+        }
+        // Fallback: generic voice search (works on AOSP Android TV builds)
+        Intent search = new Intent("android.search.action.GLOBAL_SEARCH");
+        search.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (search.resolveActivity(getPackageManager()) != null) {
+            try {
+                startActivity(search);
+                return;
+            } catch (ActivityNotFoundException ignored) {
+            }
+        }
+        // Last resort: open Google app directly if it is installed
+        Intent google = getPackageManager().getLeanbackLaunchIntentForPackage("com.google.android.googlequicksearchbox");
+        if (google == null)
+            google = getPackageManager().getLaunchIntentForPackage("com.google.android.googlequicksearchbox");
+        if (google != null) {
+            open(google);
+        } else {
+            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    /**
+     * Opens the notification list dropdown under the notification bell pill.
+     * Shows active notifications from {@link NotificationService} (or a prompt to enable
+     * notification access if not yet granted).
+     */
+    private void openNotificationCenter() {
+        notificationListenerEnabled = NotificationService.isEnabled(this);
+        View anchor = findViewById(R.id.btnNotifications);
+        View panel = getLayoutInflater().inflate(R.layout.popup_notifications, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        int width = (int) (360 * density);
+        final PopupWindow popup = glassPopup(panel, width);
+
+        if (!notificationListenerEnabled) {
+            View row = getLayoutInflater().inflate(R.layout.item_notification, rows, false);
+            ImageView icon = row.findViewById(R.id.icon);
+            icon.setImageResource(R.drawable.ic_notifications);
+            icon.setImageTintList(getColorStateList(R.drawable.pill_text));
+            icon.setDuplicateParentStateEnabled(true);
+            ((TextView) row.findViewById(R.id.title)).setText(R.string.notifications);
+            row.findViewById(R.id.time).setVisibility(View.GONE);
+            TextView text = row.findViewById(R.id.text);
+            text.setMaxLines(4);
+            text.setText(R.string.notification_listener_hint);
+            row.setOnClickListener(v -> {
+                popup.dismiss();
+                Intent i = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+                if (i.resolveActivity(getPackageManager()) != null) {
+                    open(i);
+                } else {
+                    open(systemIntent(Settings.ACTION_SETTINGS));
+                }
+            });
+            rows.addView(row);
+        } else {
+            List<NotificationService.Item> items = NotificationService.getNotifications(this);
+            notificationCount = items.size();
+            updateNotificationUi();
+
+            if (items.isEmpty()) {
+                addSettingsMenuRow(rows, popup, R.string.no_notifications, () -> {});
+            } else {
+                boolean hasClearable = false;
+                android.content.pm.PackageManager pm = getPackageManager();
+                for (NotificationService.Item item : items) {
+                    if (item.clearable) hasClearable = true;
+                    View row = getLayoutInflater().inflate(R.layout.item_notification, rows, false);
+                    ImageView iconView = row.findViewById(R.id.icon);
+                    TextView titleView = row.findViewById(R.id.title);
+                    TextView timeView = row.findViewById(R.id.time);
+                    TextView textView = row.findViewById(R.id.text);
+
+                    Drawable appIcon = null;
+                    String appName = item.pkg;
+                    try {
+                        ApplicationInfo ai = pm.getApplicationInfo(item.pkg, 0);
+                        appIcon = pm.getApplicationIcon(ai);
+                        CharSequence label = pm.getApplicationLabel(ai);
+                        if (label != null && label.length() > 0) appName = label.toString();
+                    } catch (Exception ignored) {
+                    }
+                    if (appIcon != null) {
+                        iconView.setImageDrawable(appIcon);
+                    } else {
+                        iconView.setImageResource(R.drawable.ic_notifications);
+                        iconView.setImageTintList(getColorStateList(R.drawable.pill_text));
+                        iconView.setDuplicateParentStateEnabled(true);
+                    }
+
+                    String title = !item.title.isEmpty() ? item.title : appName;
+                    String body = !item.text.isEmpty() ? item.text : (!item.title.isEmpty() ? appName : "");
+                    titleView.setText(title);
+                    if (body.isEmpty()) {
+                        textView.setVisibility(View.GONE);
+                    } else {
+                        textView.setText(body);
+                    }
+                    if (item.postTime > 0) {
+                        timeView.setText(LastOpened.describe(this, item.postTime));
+                    } else {
+                        timeView.setVisibility(View.GONE);
+                    }
+
+                    row.setOnClickListener(v -> {
+                        popup.dismiss();
+                        activateNotification(item);
+                    });
+                    if (item.clearable) {
+                        row.setOnLongClickListener(v -> {
+                            NotificationService.dismiss(item.key);
+                            popup.dismiss();
+                            return true;
+                        });
+                    }
+                    rows.addView(row);
+                }
+                if (hasClearable) {
+                    addSeparator(rows);
+                    addSettingsMenuRow(rows, popup, R.string.clear_notifications, NotificationService::dismissAll);
+                }
+            }
+        }
+
+        panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.UNSPECIFIED);
+        int[] at = new int[2];
+        anchor.getLocationInWindow(at);
+        int room = root.getHeight() - (at[1] + anchor.getHeight()) - (int) (34 * density);
+        popup.setHeight(Math.min(panel.getMeasuredHeight(), Math.max(room, (int) (120 * density))));
+        int alignment = getResources().getBoolean(R.bool.rtl_menu_bar) ? Gravity.START : Gravity.END;
+        dropIn(popup, panel, anchor, alignment);
+        if (rows.getChildCount() > 0) rows.getChildAt(0).requestFocus();
+    }
+
+    private void activateNotification(NotificationService.Item item) {
+        boolean launched = false;
+        if (item.contentIntent != null) {
+            try {
+                if (Build.VERSION.SDK_INT >= 34) {
+                    android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
+                    opts.setPendingIntentBackgroundActivityStartMode(
+                            android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                    item.contentIntent.send(this, 0, null, null, null, null, opts.toBundle());
+                } else {
+                    item.contentIntent.send();
+                }
+                launched = true;
+            } catch (Exception ignored) {
+            }
+        }
+        if (!launched && item.pkg != null && !item.pkg.isEmpty() && !"android".equals(item.pkg)) {
+            Intent launch = getPackageManager().getLeanbackLaunchIntentForPackage(item.pkg);
+            if (launch == null) launch = getPackageManager().getLaunchIntentForPackage(item.pkg);
+            if (launch != null) {
+                open(launch);
+                launched = true;
+            }
+        }
+        if (item.clearable) {
+            NotificationService.dismiss(item.key);
+        }
+    }
+
+    /**
+     * Refreshes the notification bell icon and the banner text under the clock from the current
+     * {@code notificationCount} and {@code latestNotificationText}.
+     * Called both on the broadcast from {@link NotificationService} and on each onStart
+     * (to sync state when the listener was just granted or revoked).
+     */
+    private void updateNotificationUi() {
+        if (btnNotifications == null || notificationBanner == null) return;
+
+        // Bell icon: active (red dot) when there are unread notifications, plain bell otherwise.
+        boolean hasNotifications = notificationListenerEnabled && notificationCount > 0;
+        btnNotifications.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                hasNotifications ? R.drawable.ic_notifications_active : R.drawable.ic_notifications,
+                0, 0, 0);
+
+        // Notification banner below the clock.
+        if (hasNotifications && !latestNotificationText.isEmpty()) {
+            notificationBanner.setText(latestNotificationText);
+            notificationBanner.setVisibility(View.VISIBLE);
+        } else {
+            notificationBanner.setVisibility(View.GONE);
         }
     }
 }
