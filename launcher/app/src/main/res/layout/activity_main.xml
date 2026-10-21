@@ -330,25 +330,22 @@
                 <!-- Google Assistant / Search button -->
                 <TextView
                     android:id="@+id/btnSearch"
-                    style="@style/TopButton"
-                    android:text="@string/search"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/search"
                     android:drawableStart="@drawable/ic_search"
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnInputs"
-                    style="@style/TopButton"
-                    android:text="@string/inputs"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/inputs"
                     android:drawableStart="@drawable/ic_input"
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnWifi"
-                    style="@style/TopButton"
-                    android:maxWidth="180dp"
-                    android:singleLine="true"
-                    android:ellipsize="end"
-                    android:text="@string/wifi"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
                     android:nextFocusDown="@+id/grid" />
 
@@ -369,8 +366,8 @@
 
                 <TextView
                     android:id="@+id/btnSettings"
-                    style="@style/TopButton"
-                    android:text="@string/settings"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/settings"
                     android:drawableStart="@drawable/ic_settings"
                     android:nextFocusDown="@+id/grid" />
             </LinearLayout>
