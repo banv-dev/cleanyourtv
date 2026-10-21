@@ -76,4 +76,28 @@
     <string name="dock_edit">Chỉnh sửa dock</string>
     <string name="dock_edit_hint">Chọn vị trí trên dock cần đổi rồi nhấn OK. Nhấn Quay lại để kết thúc.</string>
     <string name="dock_edit_pick_app">Giờ chọn ứng dụng để đặt vào đó rồi nhấn OK. Nhấn Quay lại để chọn vị trí khác.</string>
+    <string name="rows_below_dock_label">Số hàng dưới dock</string>
+    <string name="wallpaper_label">Hình nền</string>
+    <string name="wallpaper_state">Hình nền: %1$s</string>
+    <string name="wallpaper_none">Không có</string>
+    <string name="wallpaper_applied">Đã đổi hình nền</string>
+    <string name="wallpaper_theme_default">Mặc định của theme</string>
+    <string name="reorder">Sắp xếp ứng dụng</string>
+    <string name="reorder_hint">OK để chọn ứng dụng, phím mũi tên để di chuyển, Quay lại để đặt. Quay lại lần nữa để hoàn tất.</string>
+    <string name="reorder_not_saved">Không thể lưu thứ tự mới</string>
+    <string name="app_library">Thư viện ứng dụng</string>
+    <string name="library_empty">Không tìm thấy ứng dụng nào</string>
+    <string name="library_on_home">Trên Màn hình chính</string>
+    <string name="library_add_home">Thêm vào Màn hình chính</string>
+    <string name="library_remove_shortcut">Xóa khỏi Màn hình chính</string>
+    <string name="library_open">Mở</string>
+    <string name="library_app_info">Thông tin ứng dụng</string>
+    <string name="library_save_failed">Không thể lưu phím tắt</string>
+    <string name="library_recent">Mới · Thêm vào Màn hình chính</string>
+    <string name="library_hint_add">Nhấn để thêm vào Màn hình chính · Giữ để xem tùy chọn</string>
+    <string name="library_hint_open">Nhấn để mở · Giữ để xem tùy chọn</string>
+    <plurals name="library_app_count">
+        <item quantity="other">%1$d ứng dụng</item>
+    </plurals>
+    <string name="last_opened">Mở lần cuối %1$s</string>
 </resources>
