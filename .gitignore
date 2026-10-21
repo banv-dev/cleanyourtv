@@ -15,3 +15,5 @@ backup/
 launcher/hs_err_pid*.log
 launcher/replay_pid*.log
 .idea/
+
+themes/
