@@ -1,0 +1,16 @@
+adb shell pm uninstall -k --user 0 com.google.android.tvlauncher
+
+adb shell pm uninstall -k --user 0 com.google.android.apps.tv.launcherx\n
+  993  adb shell pm uninstall -k --user 0 com.google.android.tungsten.setupwraith\n
+  994  adb shell cmd package set-home-activity --user 0 io.github.ledat100398.tvhome/.MainActivity\n
+  995  adb shell input keyevent KEYCODE_HOME\n
+  996  adb shell cmd package set-home-activity --user 0 io.github.ledat100398.tvhome/.MainActivity\n
+  997  adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME
+  998  adb shell pm uninstall -k --user 0. com.google.android.tvlauncher/.MainActivity
+  999  adb shell pm uninstall -k --user 0 com.google.android.tvlauncher/.MainActivity
+ 1000  adb shell pm uninstall -k --user 0 com.google.android.tvlauncher
+
+
+
+
+ adb shell pm uninstall -k --user 0  io.github.ledat100398.tvhome
