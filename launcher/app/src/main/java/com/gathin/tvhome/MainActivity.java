@@ -2576,14 +2576,39 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             } catch (ActivityNotFoundException ignored) {
             }
         }
-        // Last resort: open Google app directly if it is installed
-        Intent google = getPackageManager().getLeanbackLaunchIntentForPackage("com.google.android.googlequicksearchbox");
-        if (google == null)
-            google = getPackageManager().getLaunchIntentForPackage("com.google.android.googlequicksearchbox");
-        if (google != null) {
-            open(google);
-        } else {
-            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+        // 3. Danh sách các package trợ lý phổ biến trên Android TV / Google TV (bao gồm Sony, Google TV gốc, v.v.)
+        String[] assistantPackages = {
+                "com.google.android.tv.assistant",
+                "com.google.android.googlequicksearchbox"
+        };
+
+        Intent targetIntent = null;
+        for (String pkg : assistantPackages) {
+            // Thử lấy Leanback Launch Intent trước (dành riêng cho Android TV)
+            targetIntent = getPackageManager().getLeanbackLaunchIntentForPackage(pkg);
+            // Nếu không có, thử lấy Launch Intent thông thường
+            if (targetIntent == null) {
+                targetIntent = getPackageManager().getLaunchIntentForPackage(pkg);
+            }
+            // Nếu tìm thấy package hợp lệ, dừng vòng lặp và sử dụng
+            if (targetIntent != null) {
+                break;
+            }
+        }
+
+        // 4. Thực thi mở Intent hoặc hiện Toast thông báo lỗi
+        if (targetIntent != null) {
+            targetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try {
+                startActivity(targetIntent);
+            } catch (ActivityNotFoundException ignored) {
+//                Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "target can not open", Toast.LENGTH_SHORT).show();
+            }
+            }
+         else {
+//            Toast.makeText(this, R.string.not_available, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "target null", Toast.LENGTH_SHORT).show();
         }
     }
 
