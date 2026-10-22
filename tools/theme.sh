@@ -48,6 +48,8 @@ if [ "${1:-}" = --reset ]; then
   exit 0
 fi
 THEME="${THEME_ARG:?usage: theme.sh <theme folder> | --reset}"
+THEME_NAME=$(basename "$THEME")
+
 NAME=$(basename "$THEME")
 [[ "$NAME" =~ ^[A-Za-z0-9_.-]+$ && "$NAME" != . && "$NAME" != .. ]] || { echo "unsupported theme name: $NAME" >&2; exit 1; }
 DIR="$ROOT/themes/$NAME"
@@ -89,4 +91,4 @@ else
 fi
 tv "printf '%s' '$REVISION' > $TMP-theme_revision; $(put theme_revision)" >/dev/null
 tv "$RESTART; echo applied" | tail -n 1
-echo "Theme $NAME installed/updated on the TV. Select it in Launcher Settings to apply."
+echo "Theme $THEME_NAME installed/updated on the TV. Select it in Launcher Settings to apply."
