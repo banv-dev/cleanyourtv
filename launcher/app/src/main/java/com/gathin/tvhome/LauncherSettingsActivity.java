@@ -20,6 +20,7 @@ public final class LauncherSettingsActivity extends Activity {
     private final TextView[] columnChoices = new TextView[4];
     private final TextView[] rowChoices = new TextView[4];
     private TextView wallpaperChoice;
+    private TextView themeChoice;
     private TextView animationsChoice;
     private TextView advancedChoice;
     private TextView followThemeChoice;
@@ -71,6 +72,8 @@ public final class LauncherSettingsActivity extends Activity {
         }
         wallpaperChoice = findViewById(R.id.wallpaperChoice);
         wallpaperChoice.setOnClickListener(v -> showWallpaperPicker());
+        themeChoice = findViewById(R.id.themeChoice);
+        themeChoice.setOnClickListener(v -> showThemePicker());
         animationsChoice = findViewById(R.id.animationsChoice);
         animationsChoice.setOnClickListener(v -> {
             animations = !animations;
@@ -158,6 +161,27 @@ public final class LauncherSettingsActivity extends Activity {
                 .show();
     }
 
+    private void showThemePicker() {
+        List<String> themes = Config.installedThemes(this);
+        String[] labels = new String[themes.size() + 1];
+        labels[0] = getString(R.string.theme_builtin);
+        for (int i = 0; i < themes.size(); i++) labels[i + 1] = themes.get(i);
+        String selected = choices.getString("selected_theme", "");
+        int checked = selected == null || selected.isEmpty() ? 0 : themes.indexOf(selected) + 1;
+        new AlertDialog.Builder(this).setTitle(R.string.theme_label)
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    String next = which == 0 ? "" : themes.get(which - 1);
+                    if (next.equals(selected)) return;
+                    choices.edit().putString("selected_theme", next).remove(Config.WALLPAPER_CHOICE_KEY)
+                            .remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations")
+                            .remove("advanced_effects").apply();
+                    setResult(RESULT_OK);
+                    Toast.makeText(this, R.string.theme_applied, Toast.LENGTH_SHORT).show();
+                    finish();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
     private static int indexOf(List<File> images, String name) {
         if (name == null) return -1;
         for (int i = 0; i < images.size(); i++) {
@@ -187,6 +211,9 @@ public final class LauncherSettingsActivity extends Activity {
         advancedChoice.setEnabled(animations);
         advancedChoice.setAlpha(animations ? 1f : 0.5f);
         String wallpaperCurrent = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
+        String themeCurrent = choices.getString("selected_theme", "");
+        themeChoice.setText(getString(R.string.theme_state, themeCurrent == null || themeCurrent.isEmpty()
+                ? getString(R.string.theme_builtin) : themeCurrent));
         wallpaperChoice.setText(getString(R.string.wallpaper_state,
                 "none".equals(wallpaperCurrent) ? getString(R.string.wallpaper_none)
                         : wallpaperCurrent != null ? wallpaperCurrent

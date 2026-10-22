@@ -56,6 +56,10 @@
     <string name="columns_label">Số ứng dụng mỗi hàng</string>
     <string name="rows_below_dock_label">Số hàng dưới dock</string>
     <string name="wallpaper_label">Hình nền</string>
+    <string name="theme_label">Theme</string>
+    <string name="theme_state">Theme: %1$s</string>
+    <string name="theme_builtin">Mặc định</string>
+    <string name="theme_applied">Đã đổi theme</string>
     <string name="wallpaper_state">Hình nền: %1$s</string>
     <string name="wallpaper_none">Không có</string>
     <string name="wallpaper_applied">Đã đổi hình nền</string>

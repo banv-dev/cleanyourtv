@@ -254,7 +254,27 @@ final class Config {
 
     /** The folder the theme tools push into; null when external storage is unavailable. */
     static File dir(Context ctx) {
-        return ctx.getExternalFilesDir(null);
+        File root = rootDir(ctx);
+        if (root == null) return null;
+        String selected = ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE).getString("selected_theme", "");
+        if (selected == null || selected.isEmpty()) return root;
+        if (!selected.matches("[A-Za-z0-9_.-]+") || selected.equals(".") || selected.equals("..")) return root;
+        File theme = new File(new File(root, "themes"), selected);
+        return theme.isDirectory() ? theme : root;
+    }
+
+    static File rootDir(Context ctx) { return ctx.getExternalFilesDir(null); }
+
+    static List<String> installedThemes(Context ctx) {
+        File root = ctx.getExternalFilesDir(null);
+        File directory = root == null ? null : new File(root, "themes");
+        File[] files = directory == null ? null : directory.listFiles(File::isDirectory);
+        List<String> names = new ArrayList<>();
+        if (files != null) for (File file : files) {
+            if (file.getName().matches("[A-Za-z0-9_.-]+") && new File(file, FILE_NAME).isFile()) names.add(file.getName());
+        }
+        Collections.sort(names, String.CASE_INSENSITIVE_ORDER);
+        return names;
     }
 
     static Config load(Context ctx) {

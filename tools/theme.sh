@@ -17,7 +17,7 @@ PY=venv/bin/python
 [ -x "$PY" ] || { echo "run: python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt" >&2; exit 1; }
 export MSYS_NO_PATHCONV=1
 PKG=com.gathin.tvhome
-DIR=/sdcard/Android/data/$PKG/files
+ROOT=/sdcard/Android/data/$PKG/files
 # A unique marker lets the launcher clear on-TV layout/motion choices after every theme push,
 # including a push of identical config.json bytes and --reset.
 REVISION="$("$PY" -I -c 'import uuid; print(uuid.uuid4().hex)')"
@@ -44,10 +44,16 @@ put() { echo "cp $(stage "$1") $DIR/$1 2>/dev/null || content write --uri $URI/$
 del() { echo "rm -f $DIR/$1 2>/dev/null; content delete --uri $URI/$1 2>/dev/null"; }
 
 if [ "${1:-}" = --reset ]; then
-  tv "mkdir -p $DIR 2>/dev/null; $(del config.json); $(del wallpaper.jpg); printf '%s' '$REVISION' > $TMP-theme_revision; $(put theme_revision); $RESTART; echo reset" | tail -n 1
+  tv "mkdir -p $ROOT 2>/dev/null; rm -f $ROOT/config.json $ROOT/wallpaper.jpg $ROOT/theme_revision; printf '%s' '$REVISION' > $TMP-theme_revision; cp $TMP-theme_revision $ROOT/theme_revision 2>/dev/null || content write --uri $URI/theme_revision < $TMP-theme_revision; rm -f $TMP-theme_revision; $RESTART; echo reset" | tail -n 1
   exit 0
 fi
 THEME="${THEME_ARG:?usage: theme.sh <theme folder> | --reset}"
+NAME=$(basename "$THEME")
+[[ "$NAME" =~ ^[A-Za-z0-9_.-]+$ && "$NAME" != . && "$NAME" != .. ]] || { echo "unsupported theme name: $NAME" >&2; exit 1; }
+DIR="$ROOT/themes/$NAME"
+THEME_URI="$URI/themes/$NAME"
+put() { echo "cp $(stage "$1") $DIR/$1 2>/dev/null || content write --uri $THEME_URI/$1 < $(stage "$1"); rm -f $(stage "$1")"; }
+del() { echo "rm -f $DIR/$1 2>/dev/null; content delete --uri $THEME_URI/$1 2>/dev/null"; }
 [ -f "$THEME/config.json" ] || { echo "no config.json in $THEME" >&2; exit 1; }
 "$PY" -I -c 'import json,sys; json.load(open(sys.argv[1]))' "$THEME/config.json" 2>/dev/null \
   || { echo "$THEME/config.json is not valid JSON" >&2; exit 1; }
@@ -61,7 +67,7 @@ if [ -f "$THEME/wallpaper.jpg" ]; then
 else
   tv "$(del wallpaper.jpg)" >/dev/null
 fi
-tv "mkdir -p $DIR/wallpapers 2>/dev/null; rm -f $DIR/wallpapers/*.jpg $DIR/wallpapers/*.jpeg $DIR/wallpapers/*.png $DIR/wallpapers/*.webp $DIR/wallpapers/*.JPG $DIR/wallpapers/*.JPEG $DIR/wallpapers/*.PNG $DIR/wallpapers/*.WEBP 2>/dev/null; content delete --uri $URI/wallpapers 2>/dev/null" >/dev/null
+tv "mkdir -p $DIR/wallpapers 2>/dev/null; rm -f $DIR/wallpapers/*.jpg $DIR/wallpapers/*.jpeg $DIR/wallpapers/*.png $DIR/wallpapers/*.webp $DIR/wallpapers/*.JPG $DIR/wallpapers/*.JPEG $DIR/wallpapers/*.PNG $DIR/wallpapers/*.WEBP 2>/dev/null; content delete --uri $THEME_URI/wallpapers 2>/dev/null" >/dev/null
 if [ -d "$THEME/wallpapers" ]; then
   for IMAGE in "$THEME"/wallpapers/*; do
     [ -f "$IMAGE" ] || continue
@@ -83,4 +89,4 @@ else
 fi
 tv "printf '%s' '$REVISION' > $TMP-theme_revision; $(put theme_revision)" >/dev/null
 tv "$RESTART; echo applied" | tail -n 1
-echo "Theme $(basename "$THEME") is on the TV. Undo with: tools/theme.sh --reset"
+echo "Theme $NAME installed/updated on the TV. Select it in Launcher Settings to apply."

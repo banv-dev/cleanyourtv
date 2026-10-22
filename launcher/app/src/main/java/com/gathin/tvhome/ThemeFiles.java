@@ -27,6 +27,16 @@ final class ThemeFiles {
         return null;
     }
 
+    static String namedPath(List<String> segments) {
+        if (segments == null || segments.size() < 2 || !"themes".equals(segments.get(0))) return null;
+        String name = segments.get(1);
+        if (name.isEmpty() || !name.matches("[A-Za-z0-9_.-]+") || name.equals(".") || name.equals("..")) return null;
+        List<String> child = segments.subList(2, segments.size());
+        if (isCollection(child)) return "themes/" + name + "/" + WALLPAPERS;
+        String relative = path(child);
+        return relative == null ? null : "themes/" + name + "/" + relative;
+    }
+
     /** True for "wallpapers" alone: a delete of it clears the collection's images. */
     static boolean isCollection(List<String> segments) {
         return segments != null && segments.size() == 1 && WALLPAPERS.equals(segments.get(0));

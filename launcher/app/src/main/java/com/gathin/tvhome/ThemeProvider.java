@@ -22,8 +22,9 @@ import java.io.FileNotFoundException;
 public class ThemeProvider extends ContentProvider {
 
     private File file(Uri uri) throws FileNotFoundException {
-        String path = ThemeFiles.path(uri.getPathSegments());
-        File dir = Config.dir(getContext());
+        String path = ThemeFiles.namedPath(uri.getPathSegments());
+        if (path == null) path = ThemeFiles.path(uri.getPathSegments());
+        File dir = Config.rootDir(getContext());
         if (dir == null || path == null) throw new FileNotFoundException(String.valueOf(uri));
         File f = new File(dir, path);
         File parent = f.getParentFile();
@@ -43,9 +44,10 @@ public class ThemeProvider extends ContentProvider {
 
     @Override
     public int delete(Uri uri, String selection, String[] selectionArgs) {
-        File dir = Config.dir(getContext());
-        if (dir != null && ThemeFiles.isCollection(uri.getPathSegments())) {
-            File[] images = new File(dir, ThemeFiles.WALLPAPERS).listFiles((d, name) -> ThemeFiles.collectionImage(name));
+        File dir = Config.rootDir(getContext());
+        String named = ThemeFiles.namedPath(uri.getPathSegments());
+        if (dir != null && named != null && named.endsWith("/wallpapers")) {
+            File[] images = new File(dir, named).listFiles((d, name) -> ThemeFiles.collectionImage(name));
             int n = 0;
             if (images != null) for (File f : images) if (f.delete()) n++;
             return n;
