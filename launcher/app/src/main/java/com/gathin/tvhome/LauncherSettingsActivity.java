@@ -12,6 +12,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.util.Locale;
 import java.util.List;
 
 /** Remote-friendly settings owned by the launcher; system settings stay one row away. */
@@ -21,6 +22,7 @@ public final class LauncherSettingsActivity extends Activity {
     private final TextView[] rowChoices = new TextView[4];
     private TextView wallpaperChoice;
     private TextView themeChoice;
+    private TextView languageChoice;
     private TextView animationsChoice;
     private TextView advancedChoice;
     private TextView followThemeChoice;
@@ -28,6 +30,11 @@ public final class LauncherSettingsActivity extends Activity {
     private int rowsBelowDock;
     private boolean animations;
     private boolean advancedEffects;
+
+    @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(LocaleHelper.wrap(base));
+    }
 
     @Override
     protected void onCreate(Bundle state) {
@@ -74,6 +81,8 @@ public final class LauncherSettingsActivity extends Activity {
         wallpaperChoice.setOnClickListener(v -> showWallpaperPicker());
         themeChoice = findViewById(R.id.themeChoice);
         themeChoice.setOnClickListener(v -> showThemePicker());
+        languageChoice = findViewById(R.id.languageChoice);
+        languageChoice.setOnClickListener(v -> showLanguagePicker());
         animationsChoice = findViewById(R.id.animationsChoice);
         animationsChoice.setOnClickListener(v -> {
             animations = !animations;
@@ -182,6 +191,29 @@ public final class LauncherSettingsActivity extends Activity {
                 }).setNegativeButton(android.R.string.cancel, null).show();
     }
 
+    private void showLanguagePicker() {
+        String[] codes = {"system", "vi", "en", "ar", "bn", "ca", "cs", "de", "es", "fi", "fr",
+                "in", "it", "iw", "nb", "nl", "pl", "pt", "ru", "sr-Latn", "th", "tr",
+                "uz", "zh-CN", "zh-TW"};
+        String[] labels = new String[codes.length];
+        labels[0] = getString(R.string.language_system);
+        for (int i = 1; i < codes.length; i++) {
+            Locale locale = Locale.forLanguageTag(codes[i]);
+            labels[i] = locale.getDisplayName(locale);
+            if (labels[i].isEmpty()) labels[i] = codes[i];
+        }
+        String current = choices.getString("language", "vi");
+        int checked = 0;
+        for (int i = 0; i < codes.length; i++) if (codes[i].equals(current)) checked = i;
+        new AlertDialog.Builder(this).setTitle(R.string.language_label)
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    choices.edit().putString("language", codes[which]).apply();
+                    setResult(RESULT_OK);
+                    recreate();
+                }).setNegativeButton(android.R.string.cancel, null).show();
+    }
+
     private static int indexOf(List<File> images, String name) {
         if (name == null) return -1;
         for (int i = 0; i < images.size(); i++) {
@@ -214,6 +246,10 @@ public final class LauncherSettingsActivity extends Activity {
         String themeCurrent = choices.getString("selected_theme", "");
         themeChoice.setText(getString(R.string.theme_state, themeCurrent == null || themeCurrent.isEmpty()
                 ? getString(R.string.theme_builtin) : themeCurrent));
+        String language = choices.getString("language", "vi");
+        String languageName = "system".equals(language) ? getString(R.string.language_system)
+                : Locale.forLanguageTag(language).getDisplayName(Locale.forLanguageTag(language));
+        languageChoice.setText(getString(R.string.language_state, languageName));
         wallpaperChoice.setText(getString(R.string.wallpaper_state,
                 "none".equals(wallpaperCurrent) ? getString(R.string.wallpaper_none)
                         : wallpaperCurrent != null ? wallpaperCurrent

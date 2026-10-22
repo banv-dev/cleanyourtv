@@ -16,7 +16,8 @@ public final class LocaleHelper {
         if ("system".equals(lang)) {
             return context;
         }
-        Locale locale = "en".equals(lang) ? Locale.ENGLISH : new Locale("vi");
+        Locale locale = Locale.forLanguageTag(lang);
+        if (locale.getLanguage().isEmpty()) return context;
         Locale.setDefault(locale);
         Resources res = context.getResources();
         Configuration config = new Configuration(res.getConfiguration());
