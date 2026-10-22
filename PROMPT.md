@@ -9,7 +9,8 @@ instead of writing them from scratch, and only needs to edit `launcher/.../value
 Before you start, on the TV: Settings → Device Preferences → About → press OK on "Build" 7 times,
 then go back → Developer options → turn on USB debugging (and Network/ADB debugging if your TV
 shows it). Keep the TV on. Some boxes cut power to their USB port while USB debugging is on, so a
-USB speaker or drive plugged into it goes dead until you switch debugging off again.
+USB speaker or drive plugged into it goes dead until you switch debugging off again. A USB Ethernet
+adapter on that port can drop the same way, so plan to do the whole session in one sitting.
 
 ---
 
@@ -25,6 +26,9 @@ Connect
   macOS Local Network privacy blocking adb. Don't debug it: use the Python `adb-shell` package in a venv
   as the ADB client instead. If its file push hangs on larger files, transfer files as base64 chunks
   through the shell and verify the md5.
+- If your own commands can't reach the TV at all while it answers from an ordinary terminal (a sandbox that
+  blocks the local network), ask me to run `tools/relay.py <tv ip>` in a terminal and leave it running, then
+  use `TV_HOST=127.0.0.1 TV_PORT=15555` (`tools/relay.md`).
 - If port 5555 stays closed, the TV may only offer Wireless debugging (Google TV sets often do): look for
   `_adb-tls-connect._tcp` with `dns-sd -B` or `adb mdns services`, ask me for the code and port under
   Developer options > Wireless debugging > Pair device with pairing code, then `adb pair`, `adb connect`
@@ -36,11 +40,20 @@ Connect
 Back up first
 - Save the full package list, disabled-package list, getprop output and all settings to a backup folder
   before changing anything, and write a restore script that re-enables everything you disable.
-- Ask me what is plugged into the TV's USB ports. Some devices cut their power while USB debugging
-  is on, so warn me, and remind me to switch debugging off once you're done.
+- Ask me what is plugged into the TV's USB ports, and ask separately whether the TV's network comes
+  through a USB Ethernet adapter: "nothing plugged in" can be true while the network itself is on that
+  port. Some devices cut their power while USB debugging is on, so warn me, and remind me to switch
+  debugging off once you're done. On a set that reaches the network over USB Ethernet, check before you
+  change anything: `dumpsys usb | grep host_connected` (`host_connected=false` means the adapter is
+  already gone) and `dumpsys connectivity | grep -o 'Transports: [A-Z]*'` (`WIFI` on a TV I call wired
+  means the box fell back, and ADB is running over Wi-Fi). Finish the whole job in one sitting, not
+  two: there the port only returns with USB debugging off, and that closes port 5555 as well. Prefer
+  Wireless debugging if the TV has it.
 - When you finish, close network ADB instead of leaving it open: switch USB debugging and
   Network/ADB debugging off on the TV, revoke the USB debugging authorisations, reboot, and check
-  with `tools/adb-closed.py <tv ip>` that the port refuses the connection. Don't trust `nc` on macOS:
+  with `tools/adb-closed.py <tv ip>` that the port refuses the connection. If the TV's network came
+  over a USB Ethernet adapter, unplug and replug the adapter once debugging is off - the port comes
+  back with it - and have me confirm the TV is on Ethernet again, not Wi-Fi. Don't trust `nc` on macOS:
   Local Network privacy can block it too, and its "No route to host" proves nothing; only "Connection
   refused" does. Port 5555 is plaintext, and on firmware with `ro.adb.secure=0` any device on the LAN
   can get a shell.
@@ -58,8 +71,14 @@ Debloat
 - Before touching streaming apps, voice assistant, Chromecast, Miracast or the update service, ask me
   which ones I use with a checklist question and disable only what I don't tick.
 - Run `pm` commands one per shell call, chained commands may silently stop after the first.
+- If `pm disable-user` is refused for every package, stop and tell me: some firmware (Fire OS 5 on a
+  Fire TV Box, for one) refuses `pm disable-user` with a `SecurityException`, `pm uninstall --user 0`
+  with `DELETE_FAILED_INTERNAL_ERROR`, and `pm hide` reports success while changing nothing. Check
+  with `pm list packages -d` instead of the exit code, and don't burn the session retrying - there is
+  nothing to debloat on such a set, so we fall back to its own privacy toggles and DNS blocking
+  (`docs/TROUBLESHOOTING.md`).
 - Don't launch a package whose name says factory, production, AT or fac menu (`com.cvte.tv.hkcfac`,
-  `com.at.factory.*`, `mediatek.factorymenu.ui` and the like) to see what it does, even read-only:
+  `com.cvte.tv.fac.menu`, `com.at.factory.*`, `mediatek.factorymenu.ui` and the like) to see what it does, even read-only:
   on Haier/CVTE boards opening one flips a factory-mode flag that kills the Input key and CEC, and
   makes the next boot disable Play services, Netflix and Chromecast - which the shell then cannot
   re-enable. `dumpsys package <name>` tells you what a package is without starting it, and
@@ -81,6 +100,14 @@ Launcher
   declares `android.intent.category.HOME` unless it carries the manufacturer's signature. If you
   hit either, do the debloat half, say plainly that the launcher half is impossible here, and stop
   retrying installs. The matching `examples/` header says which case your TV is.
+- Check the TV's SDK level before promising the launcher, too: `tools/tv.py 'getprop
+  ro.build.version.sdk'` against `grep minSdk launcher/app/build.gradle` (26 = Android 8.0). A set
+  below it answers `INSTALL_FAILED_OLDER_SDK`; lowering `minSdk` is a source change you would then
+  maintain yourself, and an APK rebuilt elsewhere is nothing this repo can verify. On those sets offer
+  the debloat half and say the launcher cannot be installed. With no launcher to hand over to, the
+  stock one stays: `cmd package` does not exist before Android 7, so `tools/disable.sh` asks `dumpsys
+  activity` for Home there and warns when neither answers - that warning means nothing was checked,
+  and a set with no recovery has no way back (#795).
 - Don't install a third-party launcher that charges for basics like wallpapers. Build a small native
   Android TV launcher instead (Java, AndroidX RecyclerView, minSdk matching the TV, debug build is fine),
   install it over ADB, set it as the default home and disable the stock launcher. If several apps claim
@@ -100,15 +127,24 @@ Launcher
   Input and Settings/dashboard buttons, so after disabling it ask me to press each one, and remap any that
   do nothing with the launcher's key services: `input_key_keycodes` and `app_keys` with
   INPUT_KEY_SERVICE=1, `settings_key_keycodes` with HOME_KEY_SERVICE=1 (`config.xml` or the theme).
+  Enabling either helper can cost more than the buttons it maps: on a TCL G09 build (Google TV 12) ask me
+  to hold volume up before and after, because a bound key-filtering service there drops the key repeats -
+  a ramping volume becomes one step per press, one helper or both, all or nothing - so say which one I am
+  giving up instead of enabling it quietly (`docs/devices/tcl-55p71b-g09-key-repeat.md` has the bisect and
+  the three ways out). On other sets this was not measured; if holding a button stops repeating once a
+  helper is on, it is the same trade and not a broken remote.
   A button the TV logs as `KEY_UNKNOWN` or `KEY_PROGRAM` cannot be matched by keycode, since every
   unmapped button shares it: read the scancode with `getevent -lt` and use `settings_key_scancodes`,
   which only `config.xml` carries (a theme can set keycodes, not scancodes).
 - On Android 11 and newer the launcher must declare `<queries>` for `android.intent.category.LEANBACK_LAUNCHER`,
   or package visibility silently hides every app and the grid comes up empty; target a recent SDK, some
   Google TV 14 sets refuse older targets at install.
+- Ask how many dock slots I want (4, 5, 6 or 7), which apps, and their order; keep four if I have no
+  preference. The reference launcher already supports this: use `columns` and `dock_apps` in
+  `launcher/app/src/main/res/values/config.xml` or a theme's `config.json`, without adding a new layout.
 - Design, Apple TV 4K style: pitch black background; a dock row at the bottom of the screen inside a
-  slightly lighter rounded band holding the four apps I pick (ask me which, and the order); the rest of
-  the apps in a 4-column grid below that scrolls up when I press Down; one translucent "glass" highlight
+  slightly lighter rounded band holding the apps I pick; the rest of the apps in a grid with the same
+  number of columns below that scrolls up when I press Down; one translucent "glass" highlight
   that springs from tile to tile instead of per-tile borders; the focused tile scales up slightly and
   shows its name underneath; above the dock, the focused dock app's name in large light type with an
   ambient glow in a colour sampled from its banner; frosted pill buttons top right for Inputs, Wi-Fi
@@ -120,10 +156,19 @@ Launcher
 - Keep it light: the TV has about 1 GB of RAM. No blur, no video, no network polling.
 
 Verify
-- After each change, inject remote key presses over ADB, take a screenshot from the TV and look at it.
+- After each change, inject remote key presses over ADB, take a screenshot from the TV and look at it:
+  `tools/tv.py --screenshot shots/01-after.png DPAD_RIGHT` presses the key, then captures on the TV and
+  pulls the PNG (leave the keys off to capture what is already on screen).
   Fix what you see before moving on.
-- Live TV and HDMI screenshots come back empty (0 bytes); that is the TV, not a broken debloat. Check
+- Live TV, HDMI and some streaming apps (Netflix) give empty screenshots (0 bytes); that is the TV, not a
+  broken debloat, and `--screenshot` exits 1 with that message. Check
   `dumpsys activity activities | grep topResumedActivity` instead (see `docs/TROUBLESHOOTING.md`).
+- If the screen looks enlarged and clipped after an install or a reboot, check the display overrides
+  before editing the launcher grid: `wm size` and `wm density` show a physical value next to an
+  override, and an override left over from an old resolution experiment, or a density that comes back
+  wrong on some MediaTek Sony firmware, is not a launcher bug. An empty
+  `settings get secure display_density_forced` is a normal default, not damage - read all three
+  values first and put them back if you undo (`docs/TROUBLESHOOTING.md`).
 - If a remote button relies on an accessibility helper, check that the service is enabled and bound
   for the current user, then ask me to press the real button; an injected key is not proof (see
   `docs/TROUBLESHOOTING.md`).
@@ -132,5 +177,5 @@ Verify
 
 ---
 
-Expect to answer three or four checklist questions (which apps you use, which four go in the dock,
+Expect to answer three or four checklist questions (which apps you use, the dock size and app order,
 whether to keep the voice assistant, Chromecast and firmware updates). Everything is reversible.

@@ -61,6 +61,18 @@ ADB_SECURE="$("$PY" -I tools/tv.py "getprop ro.adb.secure" 2>/dev/null | tr -d '
 # leaves the TV without a launcher looks before anything is disabled.
 HOME_QUERY='cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME'
 HOME_PKG=$("$PY" -I tools/tv.py "$HOME_QUERY" 2>/dev/null | tail -n 1 | tr -d '\r' | cut -d/ -f1 || true)
+# `cmd` arrived with Android 7 (Nougat): on an older set the query answers nothing, or the shell's own
+# "cmd: not found", and the guard below was skipped without a word - which is how a list disabled the
+# only launcher on a KitKat TV that had no replacement to hand Home over to (#795). Ask the framework
+# instead, which has printed the package holding Home since 4.x:
+#   mHomeProcess: ProcessRecord{52f4a5c8 2f4b:com.example.launcher/u0a56}
+# Only a package-shaped answer counts; on a set where Home has not started yet the line says null.
+# grep -c, not -q: under pipefail an early exit could SIGPIPE printf and fail open (see above).
+HOME_SHAPE=$(printf '%s\n' "$HOME_PKG" | grep -cE '^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$' || true)
+if [ -n "$PKGS" ] && [ "${HOME_SHAPE:-0}" -eq 0 ]; then
+  HOME_PKG=$("$PY" -I tools/tv.py 'dumpsys activity' 2>/dev/null | tr -d '\r' \
+    | sed -nE 's/.*mHomeProcess:.*[: ]([A-Za-z0-9_.]+)\/[A-Za-z0-9_.]+.*/\1/p' | head -n 1 || true)
+fi
 # grep without -q: an early exit could SIGPIPE printf and fail open under pipefail (see above).
 if [ -n "$HOME_PKG" ] && printf '%s\n' "$PKGS" | grep -xF "$HOME_PKG" >/dev/null && [ -z "${FORCE_HOME:-}" ]; then
   # Every package with a HOME activity the TV can start now: disabled packages do not answer, so this
@@ -74,7 +86,10 @@ if [ -n "$HOME_PKG" ] && printf '%s\n' "$PKGS" | grep -xF "$HOME_PKG" >/dev/null
   # A vendor's own fallback does not count either: TCL Android TV sets register
   # com.tcl.keycustomfunctionservice/.FallbackHome (and com.android.tv.settings/.system.FallbackHome),
   # a placeholder the firmware shows when no launcher is enabled, not a home the viewer can use.
+  # Nor does a factory-test app: on a Xiaomi Mi TV 4A com.duokan.factorytest/.FactoryLauncher answers
+  # HOME, and handing Home to it leaves the viewer on the factory test screen.
   OTHERS=$(printf '%s\n' "$CLAIMS" | grep -vE '/[^ ]*FallbackHome$' | cut -d/ -f1 | sort -u \
+    | grep -viE 'factorytest|factory_test|factorymode' \
     | grep -vxF "$HOME_PKG" | grep -vxF "$PKGS" \
     | grep -vxF -e com.google.android.tungsten.setupwraith -e com.android.tv.settings -e com.android.settings -e com.android.provision || true)
   if [ -z "$OTHERS" ]; then
@@ -84,14 +99,30 @@ if [ -n "$HOME_PKG" ] && printf '%s\n' "$PKGS" | grep -xF "$HOME_PKG" >/dev/null
     PKGS="$(printf '%s\n' "$PKGS" | grep -vxF "$HOME_PKG" || true)"
   fi
 fi
+# Neither query named Home, so the guard above could not run at all. Say so: a silent skip looks
+# exactly like a check that passed, and on a set too old for the launcher there is nothing to lose by
+# keeping every listed package (#795).
+if [ -n "$PKGS" ] && [ -z "$HOME_PKG" ] && [ -z "${FORCE_HOME:-}" ]; then
+  echo "Could not tell which app owns Home on this TV, so the Home guard did not run: neither" >&2
+  echo '"cmd package resolve-activity" (added in Android 7) nor "dumpsys activity" named one.' >&2
+  echo 'Check by hand that the list does not hold your launcher before running it. The replacement' >&2
+  echo 'launcher needs Android 8.0 (minSdk 26), so on an older set the stock launcher is the only Home' >&2
+  echo 'there is: disabled, it leaves nothing to start, and a set with no recovery has no way back (#795).' >&2
+fi
 
 # Only the package's own "requested permissions" block counts: a vendor app in a shared UID would otherwise
 # match through its shared user's permissions and be skipped by mistake.
-# A package that asks for android.permission.TV_INPUT_HARDWARE is the software layer under the HDMI, AV
-# and tuner inputs: routing, the HDCP handshake and scaling live in it. Disable one and the port still
-# notices the cable but shows "No Signal" for good; re-enabling the pieces in batches does not bring the
-# picture back, a full restore and a cold boot do (#321, OnePlus TV on Android 11). Keep those packages;
-# TVINPUT_ALLOW=1 disables them anyway.
+# A package that asks for android.permission.TV_INPUT_HARDWARE is usually the software layer under the
+# HDMI, AV and tuner inputs: routing, the HDCP handshake and scaling live in it. Disable one and the port
+# still notices the cable but shows "No Signal" for good; re-enabling the pieces in batches does not bring
+# the picture back, a full restore and a cold boot do (#321, OnePlus TV on Android 11). Keep those
+# packages; TVINPUT_ALLOW=1 disables them anyway.
+# The permission alone is a loose test and does produce false positives: on a Vestel shandao set the
+# MediaTek USB media player asks for it and implements no input at all. The decisive check is which
+# packages serve the service, `pm query-services --components -a android.media.tv.TvInputService`, but it
+# stays out of this guard on purpose: the command is missing on the older firmware this repo also covers,
+# and a guard that fails open costs someone their HDMI ports. So the skip still goes by the permission,
+# and the message tells the owner how to tell a false positive from the real thing.
 if [ -n "$PKGS" ] && [ -z "${TVINPUT_ALLOW:-}" ]; then
   # One round trip: the loop runs on the TV, where `dumpsys package` prints the permissions a package
   # asks for. Every name was checked as a bare package name above, so none of them can add shell syntax
@@ -110,7 +141,13 @@ if [ -n "$PKGS" ] && [ -z "${TVINPUT_ALLOW:-}" ]; then
       echo "Skipping $p: it asks for android.permission.TV_INPUT_HARDWARE, so it is the software layer" >&2
       echo "under the HDMI/AV/tuner inputs. With it disabled those inputs still notice the cable but stay" >&2
       echo "black (\"No Signal\"), and re-enabling the pieces in batches does not restore the picture: a" >&2
-      echo "full restore plus a cold boot does (#321). Set TVINPUT_ALLOW=1 to disable it." >&2
+      echo "full restore plus a cold boot does (#321)." >&2
+      echo "Asking for the permission is not proof, though: a preloaded app can request it and drive no" >&2
+      echo "input at all. What settles it is which packages actually serve the input service:" >&2
+      echo "  pm query-services --components -a android.media.tv.TvInputService" >&2
+      echo "If $p is absent from that list it is a false positive on your set, as a MediaTek USB media" >&2
+      echo "player turned out to be (examples/cecotec-shandao). Check every input after a reboot before" >&2
+      echo "trusting it, then set TVINPUT_ALLOW=1 to disable it." >&2
       PKGS="$(printf '%s\n' "$PKGS" | grep -vxF "$p" || true)"
     done
   else
