@@ -270,6 +270,17 @@
                             android:fontFamily="@font/outfit_regular"
                             android:letterSpacing="0.14"
                             android:textAllCaps="true" />
+                        <TextView
+                            android:id="@+id/lunarDate"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="left"
+                            android:singleLine="true"
+                            android:ellipsize="end"
+                            android:textColor="#A6FFFFFF"
+                            android:textSize="12sp"
+                            android:fontFamily="@font/outfit_regular"
+                            android:visibility="gone" />
                     </LinearLayout>
                 </LinearLayout>
 

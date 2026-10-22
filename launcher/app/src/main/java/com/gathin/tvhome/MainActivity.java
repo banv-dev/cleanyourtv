@@ -88,6 +88,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.TimeZone;
 
 /**
  * tvOS style home: black, a pinned dock row, an app grid, and one glass highlight that springs between tiles.
@@ -171,6 +172,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** The pills have been filled in once; later resumes refresh them after the first frame. */
     private boolean pillsShown;
     private TextView shamsiDate;
+    private TextView lunarDate;
+    private boolean showLunarDate;
     private TextView stats;
     private List<RaceWeekend.Race> raceCalendar;
     private View racePanel;
@@ -431,6 +434,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         greetingColor = greeting.getCurrentTextColor();
         btnWifi = findViewById(R.id.btnWifi);
         shamsiDate = findViewById(R.id.shamsiDate);
+        lunarDate = findViewById(R.id.lunarDate);
         stats = findViewById(R.id.stats);
         raceCalendar = cfg.raceCalendar;
         racePanel = findViewById(R.id.racePanel);
@@ -439,6 +443,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         raceSessions = findViewById(R.id.raceSessions);
         showStats = cfg.showStats;
         shamsi = cfg.shamsiDate;
+        showLunarDate = cfg.lunarDate;
+        if (showLunarDate) lunarDate.setVisibility(View.VISIBLE);
         greetingName = cfg.greetingName;
         if (shamsi) {
             shamsiDate.setVisibility(View.VISIBLE);
@@ -2185,6 +2191,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             greeting.setTextColor(greetingColor);
         }
         if (shamsi) shamsiDate.setText(Shamsi.today(getResources()));
+        if (showLunarDate) {
+            Calendar today = Calendar.getInstance();
+            VIECalendar.LunarDate lunar = VIECalendar.solar2Lunar(today.get(Calendar.YEAR),
+                    today.get(Calendar.MONTH) + 1, today.get(Calendar.DAY_OF_MONTH),
+                    (int) (TimeZone.getDefault().getRawOffset() / (60 * 60 * 1000)));
+            lunarDate.setText(getString(R.string.lunar_date_format, lunar.day, lunar.month, lunar.year));
+        }
     }
 
     // ---- race-weekend panel (a theme's race_calendar) -----------------------------------------------
@@ -2287,11 +2300,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (!online) {
                 text = getString(R.string.offline);
                 vpn = false;
-            } else if (ethernet) {
-                text = getString(R.string.ethernet);
-                icon = R.drawable.ic_ethernet;
-                flame = 4;
-                steady = true;
             } else if (wifi) {
                 WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
                 WifiInfo info = wm != null ? wm.getConnectionInfo() : null;
@@ -2301,6 +2309,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     ssid = ssid.replace("\"", "").trim();
                     if (!ssid.isEmpty() && !ssid.contains("unknown") && !ssid.equals("0x")) text = ssid;
                 }
+            } else if (ethernet) {
+                text = getString(R.string.ethernet);
+                icon = R.drawable.ic_ethernet;
+                flame = 4;
+                steady = true;
             }
         } catch (Exception ignored) {
         }
