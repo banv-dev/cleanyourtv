@@ -2315,7 +2315,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // include the Wi-Fi icon.
             TextPaint paint = btnWifi.getPaint();
             float room = btnWifi.getMaxWidth() - btnWifi.getTotalPaddingStart() - btnWifi.getTotalPaddingEnd()
-                    - span.getSize(paint, badge, 0, badge.length(), null) - paint.measureText(" ") - 2 * density;
+                - span.getSize(paint, badge, 0, badge.length(), null) - paint.measureText(" ") - 2 * density;
             String name = TextUtils.ellipsize(text, paint, Math.max(0, room), TextUtils.TruncateAt.END).toString();
             // A long badge ("VPN отключён") can leave room for a stub like "MT…", which says nothing and, after
             // rounding, can push the badge itself out of the pill. Show the badge alone then.
@@ -2327,8 +2327,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         } else if (!TextUtils.equals(btnWifi.getText(), text)) {
             btnWifi.setText(text);
         }
-        btnWifi.setContentDescription(btnWifi.getText() != null ? btnWifi.getText() : text);
-        btnWifi.setText("");
+        if (wifiIconOnly) {
+            btnWifi.setContentDescription(btnWifi.getText());
+            btnWifi.setText(null);
+        }
         if (festive && diya != null) {
             if (online && flame == 0) flame = 3;   // online some other way (cellular, USB tethering)
             diya.setSteady(steady);
@@ -2340,6 +2342,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         }
     }
+
 
     /** config.xml icon_only_buttons. */
     private boolean iconOnlyButtons;

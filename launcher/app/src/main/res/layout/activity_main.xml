@@ -337,15 +337,18 @@
 
                 <TextView
                     android:id="@+id/btnInputs"
-                    style="@style/TopButtonIcon"
-                    android:contentDescription="@string/inputs"
+                    style="@style/TopButton"
+                    android:text="@string/inputs"
                     android:drawableStart="@drawable/ic_input"
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView
                     android:id="@+id/btnWifi"
-                    style="@style/TopButtonIcon"
-                    android:contentDescription="@string/wifi"
+                    style="@style/TopButton"
+                    android:maxWidth="180dp"
+                    android:singleLine="true"
+                    android:ellipsize="end"
+                    android:text="@string/wifi"
                     android:drawableStart="@drawable/ic_wifi"
                     android:nextFocusDown="@+id/grid" />
 
@@ -374,8 +377,8 @@
 
                 <TextView
                     android:id="@+id/btnSettings"
-                    style="@style/TopButtonIcon"
-                    android:contentDescription="@string/settings"
+                    style="@style/TopButton"
+                    android:text="@string/settings"
                     android:drawableStart="@drawable/ic_settings"
                     android:nextFocusDown="@+id/grid" />
             </LinearLayout>
