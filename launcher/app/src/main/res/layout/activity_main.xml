@@ -333,6 +333,7 @@
                     style="@style/TopButtonIcon"
                     android:contentDescription="@string/search"
                     android:drawableStart="@drawable/ic_search"
+                    android:drawableTint="@null"
                     android:nextFocusDown="@+id/grid" />
 
                 <TextView

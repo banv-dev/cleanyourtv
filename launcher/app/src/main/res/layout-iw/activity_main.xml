@@ -299,6 +299,27 @@
                 android:focusable="false"
                 android:visibility="gone" />
 
+            <!-- Notification banner: shows the latest notification text below the clock; gone when empty. -->
+            <TextView
+                android:id="@+id/notificationBanner"
+                android:layout_width="0dp"
+                android:layout_below="@id/leftBlock"
+                android:layout_alignEnd="@id/leftBlock"
+                android:layout_toEndOf="@+id/topButtons"
+                android:layout_marginStart="16dp"
+                android:gravity="right"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:singleLine="true"
+                android:ellipsize="end"
+                android:textColor="#CCffffff"
+                android:textSize="13sp"
+                android:fontFamily="@font/outfit_regular"
+                android:letterSpacing="0.02"
+                android:focusable="false"
+                android:drawablePadding="6dp"
+                android:visibility="gone" />
+
             <LinearLayout
                 android:id="@+id/topButtons"
                 android:layout_width="wrap_content"
@@ -324,6 +345,14 @@
                     android:drawableStart="@drawable/ic_swap_vert"
                     android:nextFocusDown="@+id/grid" />
 
+                <!-- Notification bell button -->
+                <TextView
+                    android:id="@+id/btnNotifications"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/notifications"
+                    android:drawableStart="@drawable/ic_notifications"
+                    android:nextFocusDown="@+id/grid" />
+
                 <TextView
                     android:id="@+id/btnWifi"
                     style="@style/TopButtonIcon"
@@ -336,6 +365,14 @@
                     style="@style/TopButtonIcon"
                     android:contentDescription="@string/inputs"
                     android:drawableStart="@drawable/ic_input"
+                    android:nextFocusDown="@+id/grid" />
+
+                <!-- Google Assistant / Search button -->
+                <TextView
+                    android:id="@+id/btnSearch"
+                    style="@style/TopButtonIcon"
+                    android:contentDescription="@string/search"
+                    android:drawableStart="@drawable/ic_search"
                     android:nextFocusDown="@+id/grid" />
             </LinearLayout>
         </RelativeLayout>

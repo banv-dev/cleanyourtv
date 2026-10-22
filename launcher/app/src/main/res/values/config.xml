@@ -111,6 +111,12 @@
          button's long-press menu, so it needs no extra button on screen. -->
     <bool name="reorder_button">false</bool>
 
+    <!-- Google Assistant / Search button in the top bar. -->
+    <bool name="google_assistant">false</bool>
+
+    <!-- Notification bell button in the top bar. -->
+    <bool name="show_notification">false</bool>
+
     <!-- Grid rows left visible under the dock on the home screen. 0 = dock sits at the very bottom. Tiles shrink if
          the dock, its title and this many rows would not otherwise fit the screen height. -->
     <integer name="rows_below_dock">0</integer>

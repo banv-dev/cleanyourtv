@@ -215,6 +215,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private RecyclerView.OnScrollListener pendingFocusScroll;
 
     // ---- search + notification additions --------------------------------------------------------
+    private boolean googleAssistant;
+    private boolean showNotification;
     private View btnSearch;
     private TextView btnNotifications;
     private TextView notificationBanner;
@@ -327,6 +329,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         inputAction = cfg.inputAction;
         sourcePanelService = cfg.sourcePanelService;
         sourcePanelAction = cfg.sourcePanelAction;
+        googleAssistant = cfg.googleAssistant;
+        showNotification = cfg.showNotification;
 
         root = findViewById(R.id.root);
         root.setBackgroundColor(cfg.backgroundColor);
@@ -516,11 +520,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         // Search (Google Assistant) button.
         btnSearch = findViewById(R.id.btnSearch);
-        btnSearch.setOnClickListener(v -> openGoogleAssistant());
+        if (btnSearch != null) {
+            btnSearch.setOnClickListener(v -> openGoogleAssistant());
+            btnSearch.setVisibility(googleAssistant ? View.VISIBLE : View.GONE);
+        }
 
         // Notification bell button.
         btnNotifications = findViewById(R.id.btnNotifications);
-        btnNotifications.setOnClickListener(v -> openNotificationCenter());
+        if (btnNotifications != null) {
+            btnNotifications.setOnClickListener(v -> openNotificationCenter());
+            btnNotifications.setVisibility(showNotification ? View.VISIBLE : View.GONE);
+        }
 
         // Notification banner (below the clock, showing the latest notification text).
         notificationBanner = findViewById(R.id.notificationBanner);
@@ -553,24 +563,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 focusTile(lastFocused % COLUMNS);
                 return true;
             }
-            int firstButton = btnSearch.getVisibility() == View.VISIBLE ? R.id.btnSearch
-                    : (btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : R.id.btnWifi);
+            int firstButton = (btnSearch != null && btnSearch.getVisibility() == View.VISIBLE) ? R.id.btnSearch
+                    : (btnInputs != null && btnInputs.getVisibility() == View.VISIBLE ? R.id.btnInputs : R.id.btnWifi);
             int leftButton = rtlMenuBar ? R.id.btnSettings : firstButton;
             int rightButton = rtlMenuBar ? firstButton : R.id.btnSettings;
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) return v.getId() == leftButton;
             return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == rightButton;
         };
-        btnSearch.setOnKeyListener(pillKeys);
-        btnInputs.setOnKeyListener(pillKeys);
-        btnWifi.setOnKeyListener(pillKeys);
-        btnNotifications.setOnKeyListener(pillKeys);
-        btnSettings.setOnKeyListener(pillKeys);
-        btnReorder.setOnKeyListener(pillKeys);
+        if (btnSearch != null) btnSearch.setOnKeyListener(pillKeys);
+        if (btnInputs != null) btnInputs.setOnKeyListener(pillKeys);
+        if (btnWifi != null) btnWifi.setOnKeyListener(pillKeys);
+        if (btnNotifications != null) btnNotifications.setOnKeyListener(pillKeys);
+        if (btnSettings != null) btnSettings.setOnKeyListener(pillKeys);
+        if (btnReorder != null) btnReorder.setOnKeyListener(pillKeys);
         if (advancedEffects) {
             for (View button : new View[]{btnSearch, btnInputs, btnWifi, btnNotifications, btnReorder, btnSettings}) {
-                button.setOnFocusChangeListener((view, focused) -> view.animate()
-                        .scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
-                        .setDuration(160).start());
+                if (button != null) {
+                    button.setOnFocusChangeListener((view, focused) -> view.animate()
+                            .scaleX(focused ? 1.04f : 1f).scaleY(focused ? 1.04f : 1f)
+                            .setDuration(160).start());
+                }
             }
         }
         if (festive) applyFestiveSkin((TextView) btnInputs, (TextView) btnSettings);
@@ -636,8 +648,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             registerReceiver(timeReceiver, timeFilter);
             registerReceiver(notificationReceiver, notificationFilter);
         }
-        notificationListenerEnabled = NotificationService.isEnabled(this);
-        NotificationService.refresh(this);
+        if (showNotification) {
+            notificationListenerEnabled = NotificationService.isEnabled(this);
+            NotificationService.refresh(this);
+        }
         updateNotificationUi();
         updateClockVisibility();
     }
@@ -2893,6 +2907,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     private void updateNotificationUi() {
         if (btnNotifications == null || notificationBanner == null) return;
+        if (!showNotification) {
+            btnNotifications.setVisibility(View.GONE);
+            notificationBanner.setVisibility(View.GONE);
+            return;
+        }
+        btnNotifications.setVisibility(View.VISIBLE);
 
         // Bell icon + unread count when there are unread notifications, plain circular bell otherwise.
         boolean hasUnread = notificationListenerEnabled && notificationCount > 0;
