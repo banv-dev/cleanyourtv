@@ -146,6 +146,11 @@ public class NotificationService extends NotificationListenerService {
             List<Item> items = new ArrayList<>(visible.size());
             for (StatusBarNotification sbn : visible) {
                 Notification n = sbn.getNotification();
+                if (n == null) continue;
+                // Ignore media playback notifications (Spotify, YouTube Music, etc.)
+                if (Notification.CATEGORY_TRANSPORT.equals(n.category)) continue;
+                if ((n.flags & Notification.FLAG_GROUP_SUMMARY) != 0) continue;
+
                 CharSequence rawTitle = n.extras != null
                         ? n.extras.getCharSequence(Notification.EXTRA_TITLE) : null;
                 if (TextUtils.isEmpty(rawTitle) && n.extras != null) {
@@ -165,7 +170,7 @@ public class NotificationService extends NotificationListenerService {
                 String title = rawTitle != null ? rawTitle.toString().trim() : "";
                 String text = rawText != null ? rawText.toString().trim() : "";
                 // Skip silent background service notifications with no text or title.
-                if (title.isEmpty() && text.isEmpty()) continue;
+                if (title.isEmpty() || text.isEmpty()) continue;
 
                 PendingIntent pi = n.contentIntent;
                 if (pi == null && n.actions != null && n.actions.length > 0) {
