@@ -11,6 +11,7 @@
     <string name="notification_listener_hint">Hãy cấp quyền Truy cập thông báo trong Cài đặt → Ứng dụng → Quyền truy cập đặc biệt → Truy cập thông báo.</string>
     <string name="inputs">Nguồn vào</string>
     <string name="wifi">Wi-Fi</string>
+
     <string name="settings">Cài đặt</string>
     <string name="choose_input">Nguồn vào</string>
     <string name="connected">Đã kết nối</string>
@@ -22,8 +23,24 @@
     <string name="good_afternoon">Xin chào</string>
     <string name="good_evening">Xin chào</string>
     <string name="good_night">Xin chào</string>
+
+
+
+
+
+
+
+
+    <string name="more_inputs">More inputs</string>
+
+
+
+    <string name="good_forenoon">Good late morning</string>
+
+
     <string name="festival_dussehra_greeting">Happy Dussehra</string>
     <string name="festival_diwali_greeting">Happy Diwali</string>
+    <string name="festival_halloween_greeting">Happy Halloween</string>
     <string name="ethernet">Ethernet</string>
     <string name="offline">Mất mạng</string>
     <string name="not_available">TV này không hỗ trợ</string>
@@ -49,6 +66,7 @@
     <string name="storage_gb_decimal">%1$.1f GB</string>
     <string name="dream_name">Đồng hồ</string>
     <string name="vpn">VPN</string>
+
     <string name="vpn_off">VPN tắt</string>
     <string name="home_settings">Chọn màn hình chính mặc định</string>
     <string name="home_settings_help">Chọn màn hình chính gốc để thôi dùng CleanYourTV, hoặc chọn CleanYourTV để dùng lại. Launcher gốc phải đang bật và TV phải có mục chọn màn hình chính; nếu launcher gốc đã bị tắt, hãy chạy script khôi phục trước.</string>
@@ -117,6 +135,82 @@
     <string name="library_recent">Mới · Thêm vào Màn hình chính</string>
     <string name="library_hint_add">Nhấn để thêm vào Màn hình chính · Giữ để xem tùy chọn</string>
     <string name="library_hint_open">Nhấn để mở · Giữ để xem tùy chọn</string>
+
+
+
+
+
+    <string name="native_settings">Native settings</string>
+
+
+    <string name="dock_opacity_label">Dock band opacity</string>
+
+
+
+
+
+
+
+
+    <string name="open_on_start_label">Open on start</string>
+    <string name="open_on_start_state">Open on start: %1$s</string>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Settings menu: opens the system power menu (Restart on most TVs). -->
+    <string name="power_menu">Restart…</string>
+
+
+    <string name="tile_add_to_dock">Add to dock</string>
+    <string name="tile_replace_in_dock">Replace with another app</string>
+    <string name="dock_edit_pick_place">Choose the dock place for this app and press OK. Back to cancel.</string>
+
+    <string name="tile_move">Move</string>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     <plurals name="library_app_count">
         <item quantity="other">%1$d ứng dụng</item>
     </plurals>
@@ -148,6 +242,7 @@
     <string name="race_countdown_days">%1$d ngày %2$d giờ</string>
     <!-- Cinematic top shelf (cinematic_home): the line under the focused dock app's name; %1$s is when it was
          last opened, e.g. "5 minutes ago" or "yesterday, 9:40 pm". -->
+
     <string name="last_opened">Mở lần cuối %1$s</string>
 
     <string name="language_label">Ngôn ngữ</string>
@@ -155,5 +250,9 @@
     <string name="language_vi">Tiếng Việt</string>
     <string name="language_en">English</string>
     <string name="language_system">Mặc định hệ thống</string>
-    <string name="lunar_date_format">Âm lịch: %1$d/%2$d/%3$d</string>
+
+
+    <!-- game_day: a game on now, in the race panel. -->
+    <string name="game_live">Live now</string>
+
 </resources>
