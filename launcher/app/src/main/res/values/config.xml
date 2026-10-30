@@ -247,7 +247,7 @@
          Gregorian date. -->
     <bool name="shamsi_date">false</bool>
     <!-- Lunisolar (Vietnamese / Chinese / Korean) date under the date; config.json lunar_date, lunar_utc_offset (7, 8 or 9, default by locale). -->
-    <bool name="lunar_date">false</bool>
+    <bool name="lunar_date">true</bool>
     <!-- The date (with the Shamsi and lunar lines) on its own line under the clock instead of beside it, for a top bar
          whose pills leave the date too little room. Can also be set with "date_below_clock" in a theme. -->
     <bool name="date_below_clock">false</bool>
