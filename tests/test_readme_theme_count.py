@@ -12,12 +12,28 @@ main both still say ten while themes/ holds eleven, so the German and Dutch page
 fewer look than the English one does - the gap #2132 and #2461 closed for the press counts, on the
 number a theme PR moves.
 
+README.uk.md is the fourth such page, and it is the case the table below missed: the Ukrainian page
+landed with the row in its own words ("У themes/ постачається чотирнадцять"), while the table carried
+English, German and Dutch only, so claims() read nothing on it and the pinned set of pages that state
+a count stayed the three it named. A page left at the previous count - the failure the German and
+Dutch pages were - would have passed here without a word.
+
 The number is never copied here. A page's count is read out of the sentence it writes it in, through
-one table of the words these three languages state a number in, so a theme folder added by a PR moves
+one table of the words these four languages state a number in, so a theme folder added by a PR moves
 this test with that page, and a page that starts stating the count is held the same way. A word the
 table does not carry names the page that wrote it rather than reading as no claim at all; one is left
 out of the table on purpose, since "een" and "ein" are also the articles these languages put before a
-noun, and a single-theme repo is not a thing.
+noun, and a single-theme repo is not a thing. Another language that writes the count as a word means
+another line in that table: the last page added did not fail here, it simply became a page this file
+could not see. README.tr.md, the fifth page, writes it in digits ("15 tema"), which NUMBER reads
+without a table line.
+
+That one table is what README.md's row is read through too. The row had a twelve-word table of its own
+while the sentences were read through one that carries twenty, and the two agreed only while themes/
+held twelve: the thirteenth theme, "thirteen ship in themes/", is what docs/workflows/theme.md step 5
+tells its author to write, and the row's reader answered "the Themes row states no count" for it - a
+page that stated its count correctly, refused by the check that was meant to hold it. The row keeps one
+word the shared table leaves out, "one", because its number is anchored to "ship".
 
 A theme folder is one with a config.json - the same rule tests/test_themes.py uses, and the same one
 the launcher pushes (tools/theme.sh reads a folder's config.json).
@@ -37,30 +53,52 @@ FRONT = ROOT / "README.md"
 # The row is `| **Themes** | ... N ship in [`themes/`](themes/)`. A count written as a word or as
 # digits is accepted, so rewording the cell stays free as long as the number is still there.
 ROW_START = "| **Themes** |"
-COUNT = re.compile(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+ship\b",
-                   re.IGNORECASE)
-WORDS = {
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
-}
 
 # Every feature row that names themes/ and states how many ship there, whatever language it is in:
-# English "eleven ship in", German "Zehn liegen in", Dutch "staan tien thema's". The words come from
-# the three languages the front pages are written in today, two to twenty each; one is left out
-# because "een" and "ein" are also the articles those languages put before a noun, so an English
-# "one" would read a Dutch sentence as a claim of one theme.
-NUMBER_WORDS = {**WORDS, "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
+# English "eleven ship in", German "Zehn liegen in", Dutch "staan tien thema's", Ukrainian
+# "постачається чотирнадцять". The words come from the four languages whose front pages write the
+# count as a word today (README.tr.md writes digits), two to twenty-five each; one is left out because
+# "een" and "ein" are also the articles those languages put before a noun, so an English "one" would
+# read a Dutch sentence as a claim of one theme.
+NUMBER_WORDS = {"two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8,
+                "nine": 9, "ten": 10, "eleven": 11, "twelve": 12,
+                "thirteen": 13, "fourteen": 14, "fifteen": 15, "sixteen": 16,
                 "seventeen": 17, "eighteen": 18, "nineteen": 19, "twenty": 20,
+                "twenty-one": 21, "twenty-two": 22, "twenty-three": 23, "twenty-four": 24, "twenty-five": 25,
                 "zwei": 2, "drei": 3, "vier": 4, "fünf": 5, "sechs": 6, "sieben": 7, "acht": 8,
                 "neun": 9, "zehn": 10, "elf": 11, "zwölf": 12, "dreizehn": 13, "vierzehn": 14,
                 "fünfzehn": 15, "sechzehn": 16, "siebzehn": 17, "achtzehn": 18, "neunzehn": 19,
-                "zwanzig": 20,
+                "zwanzig": 20, "einundzwanzig": 21, "zweiundzwanzig": 22, "dreiundzwanzig": 23,
+                "vierundzwanzig": 24, "fünfundzwanzig": 25,
                 "twee": 2, "drie": 3, "vijf": 5, "zes": 6, "zeven": 7, "negen": 9, "tien": 10,
                 "twaalf": 12, "dertien": 13, "veertien": 14, "vijftien": 15, "zestien": 16,
-                "zeventien": 17, "achttien": 18, "negentien": 19, "twintig": 20}
+                "zeventien": 17, "achttien": 18, "negentien": 19, "twintig": 20,
+                "eenentwintig": 21, "tweeëntwintig": 22, "drieëntwintig": 23, "vierentwintig": 24,
+                "vijfentwintig": 25,
+                # Ukrainian, README.uk.md's row as it is written today. The apostrophe is the page's
+                # own: п'ять, дев'ять and п'ятнадцять carry a straight one there.
+                "два": 2, "три": 3, "чотири": 4, "п'ять": 5, "шість": 6, "сім": 7, "вісім": 8,
+                "дев'ять": 9, "десять": 10, "одинадцять": 11, "дванадцять": 12, "тринадцять": 13,
+                "чотирнадцять": 14, "п'ятнадцять": 15, "шістнадцять": 16, "сімнадцять": 17,
+                "вісімнадцять": 18, "дев'ятнадцять": 19, "двадцять": 20,
+                "двадцять одна": 21, "двадцять дві": 22, "двадцять три": 23, "двадцять чотири": 24,
+                "двадцять п'ять": 25}
+# The row is read through that same table, so a thirteenth theme is "thirteen ship in themes/" and not
+# a row that states nothing. A second table for the row - one that stopped at twelve while this one
+# carried twenty - is what made the thirteenth theme fail as "the Themes row states no count".
+# "one" is the one word the table leaves out and the row can carry, because COUNT anchors the number
+# to "ship": "one ship in themes/" is a count where a bare "een"/"ein" on a page line is an article.
+COUNT_WORDS = {"one": 1, **NUMBER_WORDS}
 THEMES_LINK = "[`themes/`](themes/)"
-NUMBER = re.compile(r"\b(\d+|" + "|".join(sorted((re.escape(w) for w in NUMBER_WORDS),
-                                                 key=len, reverse=True)) + r")\b", re.IGNORECASE)
+
+
+def word_alternation(words):
+    """The words as one regex alternative, longest first so "fourteen" is not read as "four"."""
+    return "|".join(sorted((re.escape(w) for w in words), key=len, reverse=True))
+
+
+COUNT = re.compile(r"\b(\d+|" + word_alternation(COUNT_WORDS) + r")\s+ship\b", re.IGNORECASE)
+NUMBER = re.compile(r"\b(\d+|" + word_alternation(NUMBER_WORDS) + r")\b", re.IGNORECASE)
 
 
 def themes_row(text):
@@ -79,7 +117,7 @@ def count_in(row):
     if match is None:
         return None
     token = match.group(1).lower()
-    return int(token) if token.isdigit() else WORDS[token]
+    return int(token) if token.isdigit() else COUNT_WORDS[token]
 
 
 def theme_folders(root=THEMES):
@@ -140,10 +178,13 @@ class ReadmeThemeCountTest(unittest.TestCase):
                         f"{page.name} says {claimed} themes and themes/ holds {len(shipped)}: "
                         f"{', '.join(shipped)}")
         # The walk above passes while finding nothing, which is how the German and Dutch rows went
-        # stale in the first place: these three pages state the count today, so one that stops
-        # saying it fails here rather than quietly leaving the check.
-        self.assertEqual(sorted(set(stating)), ["README.de.md", "README.md", "README.nl.md"],
-                         "the front pages that state the theme count are not the three that did: "
+        # stale in the first place: these five pages state the count today, so one that stops
+        # saying it fails here rather than quietly leaving the check. README.uk.md joined them with
+        # the Ukrainian words above; before that it stated its count and this list still read three.
+        # README.tr.md states its count in digits, so it needs no words in the table.
+        self.assertEqual(sorted(set(stating)),
+                         ["README.de.md", "README.md", "README.nl.md", "README.tr.md", "README.uk.md"],
+                         "the front pages that state the theme count are not the five that did: "
                          f"{sorted(set(stating))}")
 
 
@@ -184,6 +225,21 @@ class CountTest(unittest.TestCase):
         self.assertEqual([({11}, german)], claims(german))
         self.assertEqual([({11}, dutch)], claims(dutch))
 
+    def test_a_ukrainian_sentence_is_read(self):
+        """README.uk.md's row as the page writes it: the count follows the link, then the gloss."""
+        ukrainian = ("| **Теми** | Тло, шпалери й розкладка з `config.json`, надісланого через Wi-Fi, "
+                     "без перезбирання. У [`themes/`](themes/) постачається чотирнадцять, включно з "
+                     "вбудованою `default/` |")
+        self.assertEqual([({14}, ukrainian)], claims(ukrainian))
+
+    def test_the_ukrainian_fourteen_is_not_read_as_the_four_it_starts_with(self):
+        # "чотирнадцять" opens with "чотири", "тринадцять" with "три", "дванадцять" with "два": the
+        # longest-first alternation is what keeps a count of twelve from being read as two.
+        for word, number in (("чотирнадцять", 14), ("тринадцять", 13), ("дванадцять", 12)):
+            with self.subTest(word=word):
+                line = f"| **Теми** | У [`themes/`](themes/) постачається {word} |"
+                self.assertEqual([({number}, line)], claims(line))
+
     def test_a_digits_count_is_read_in_any_sentence(self):
         self.assertEqual([({12}, "| **Themes** | 12 liegen in [`themes/`](themes/) |")],
                          claims("| **Themes** | 12 liegen in [`themes/`](themes/) |"))
@@ -209,6 +265,48 @@ class CountTest(unittest.TestCase):
         # all, which is how the two translations stayed at ten. The table is the one place to add it.
         self.assertIn("elf", NUMBER_WORDS)
         self.assertNotIn("een", NUMBER_WORDS)
+
+    def test_the_thirteenth_theme_is_read_as_a_word(self):
+        """docs/workflows/theme.md step 5 as a thirteenth theme follows it.
+
+        The row states its count in the words the page writes ("thirteen ship in themes/"), which is
+        the shape every theme from the twelfth on takes. The row used to be read through a twelve-word
+        table of its own while the sentences went through the one with twenty, so this line was refused
+        as "the Themes row states no count" while `claims()` read 13 out of the very same line.
+        """
+        row = ("| **Themes** | Background, wallpaper and layout from a `config.json` pushed over Wi-Fi, "
+               "no rebuild. thirteen ship in [`themes/`](themes/), the built-in `default/` included |")
+        self.assertEqual(13, count_in(row))
+        # The two readers over that line must not disagree again.
+        self.assertEqual([({13}, row)], claims(row))
+
+    def test_every_word_the_sentences_are_read_in_is_a_count_in_the_row(self):
+        for word, number in (("twelve", 12), ("thirteen", 13), ("fourteen", 14), ("seventeen", 17),
+                             ("twenty", 20)):
+            with self.subTest(word=word):
+                # Longest first: "fourteen ship" must not be read as the "four" it starts with.
+                self.assertEqual(number, count_in(
+                    f"| **Themes** | ... {word} ship in [`themes/`](themes/) |"))
+
+    def test_one_ship_in_is_a_count_beside_that_anchor(self):
+        # "one" is the word the shared table leaves out, because a bare "een"/"ein" on a page line is
+        # an article: the row's number is anchored to "ship", so here it is a count like any other.
+        self.assertEqual(1, count_in("| **Themes** | ... one ship in [`themes/`](themes/) |"))
+
+    def test_a_word_outside_the_table_still_reads_as_no_count(self):
+        self.assertEqual(None, count_in("| **Themes** | ... a few ship in [`themes/`](themes/) |"))
+
+    def test_a_stand_in_tree_of_thirteen_themes_and_a_row_saying_thirteen_agree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("aurora", "cinematic", "default", "dusk", "glass", "halloween", "nature",
+                         "retro", "ruska", "scenes", "six-columns", "sweden", "storm"):
+                (root / "themes" / name).mkdir(parents=True)
+                (root / "themes" / name / "config.json").write_text("{}", encoding="utf-8")
+            shipped = theme_folders(root / "themes")
+            self.assertEqual(13, len(shipped))
+            row = "| **Themes** | ... thirteen ship in [`themes/`](themes/) |"
+            self.assertEqual(len(shipped), count_in(row))
 
     def test_every_front_page_in_a_stand_in_tree_is_walked(self):
         with tempfile.TemporaryDirectory() as tmp:

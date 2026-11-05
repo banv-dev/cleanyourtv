@@ -43,6 +43,7 @@ final class Config {
     static final String ROWS_BELOW_DOCK_KEY = "rows_below_dock";
     static final String WALLPAPER_CHOICE_KEY = "wallpaper_choice";
     static final String DOCK_OPACITY_KEY = "dock_opacity";
+    static final String CLOCK_FORMAT_KEY = "clock_format";
     /**
      * Counts the changes made in Launcher settings. Home remembers the count it was built with and rebuilds on
      * resume when it differs, however the settings were left (see MainActivity#onResume).
@@ -109,6 +110,8 @@ final class Config {
     final boolean openOnStartChoice;
     /** Seconds the boot's app waits for a validated network; 0 opens it at once (open_on_start_network_wait). */
     final int openOnStartNetworkWait;
+    /** The Open on start app also opens when the screen comes back on (config.xml, open_on_start_on_wake). */
+    final boolean openOnStartOnWake;
     /** The focused dock app's name in large type above the dock (config.xml, dock_title). */
     final boolean dockTitle;
     /** The dock as its own row: band, no names, parked low (config.xml dock_row). false: one plain grid. */
@@ -131,6 +134,10 @@ final class Config {
     final boolean iconOnlyInputs;
     /** With vpn_pill, the VPN pill as a round lock button (config.xml / theme icon_only_vpn). */
     final boolean iconOnlyVpn;
+    /** Back on the Home screen opens the clock screensaver instead of doing nothing (config.xml / theme back_opens_clock). */
+    final boolean backOpensClock;
+    /** The ambient glow takes a new app's colour in one frame instead of dipping and fading (config.xml / theme glow_snap). */
+    final boolean glowSnap;
     /** App library as a round button in the top bar (config.xml library_button); needs app_library. */
     final boolean libraryButton;
     /** The App library pill after the last Home row; false hides it while libraryButton is on (show_library_pill). */
@@ -182,6 +189,10 @@ final class Config {
     final boolean powerOnHomeAlways;
     /** The Inputs menu lists only inputs reporting connected; the rest fold behind a More inputs row (config.xml / theme inputs_connected_only). */
     final boolean inputsConnectedOnly;
+    /** Only CEC device rows in the Inputs menu show a connection state, never a bare HDMI port (config.xml / theme inputs_cec_state_only). */
+    final boolean inputsCecStateOnly;
+    /** "12", "24" or "system" (theme clock_format, or Launcher settings' Clock row); see ClockFormat. */
+    final String clockFormat;
     /** The Settings button opens the quick settings panel instead of the TV's Settings (settings_key_panel). */
     final boolean settingsKeyPanel;
     /** Home puts the remote's accessibility helpers back after a force stop (restore_key_services; ServiceRepair). */
@@ -276,7 +287,7 @@ final class Config {
                    Map<String, String> appBanners, String sourcePanelService, String sourcePanelAction,
                    String sourcePanelExtra, boolean coocaaSources, String inputAction, List<String> inputSources,
                    String inputUriScheme, int columns, int rowsBelowDock, boolean animations, boolean advancedEffects,
-                   boolean shamsiDate, boolean lunarDate, String greetingName, boolean moduleCards, boolean reducedMotion, boolean bootToLiveTv, boolean openOnStartChoice, boolean dockTitle, boolean dockRow, boolean topMenu, boolean launcherSettingsButton, boolean reorderButton, boolean showNetworkPill, boolean showInputsPill, boolean iconOnlyButtons, boolean iconOnlyInputs, boolean libraryButton, boolean showLibraryPill, int wifiLabelWidth, boolean alwaysShowNames, boolean wallpaperTrueColor, boolean focusOvershoot, String vpnApp,
+                   boolean shamsiDate, String greetingName, boolean moduleCards, boolean reducedMotion, boolean bootToLiveTv, boolean openOnStartChoice, boolean dockTitle, boolean dockRow, boolean topMenu, boolean launcherSettingsButton, boolean reorderButton, boolean showNetworkPill, boolean showInputsPill, boolean iconOnlyButtons, boolean iconOnlyInputs, boolean libraryButton, boolean showLibraryPill, int wifiLabelWidth, boolean alwaysShowNames, boolean wallpaperTrueColor, boolean focusOvershoot, String vpnApp,
                    boolean showHomeSettingsShortcut, boolean showStats, String gameDay, boolean appLibrary, boolean appLibrarySelection, boolean libraryOkOpens, boolean uniformTiles, int backgroundColor, int skyIntensity,
                    int[] settingsKeycodes, boolean settingsKeyPanel, boolean restoreKeyServices, boolean wallpaperEnabled, File wallpaper, List<File> wallpapers,
                    int wallpaperRotationMinutes, int wallpaperDim, int dockOpacity, String wallpaperOrder, boolean overlayApplied,
@@ -284,8 +295,8 @@ final class Config {
                    List<RaceWeekend.Race> raceCalendar, boolean cinematicHome, boolean ambientGlow, boolean appGlow, boolean fadeRows, int homeIdleClockMinutes,
                    boolean keyFilter, boolean dockGlass, String glowStyle, boolean wallpaperCaptions,
                    boolean handleViewInputs, boolean tileMenu, boolean dockEvenPadding, boolean dockBand, boolean cinematicDots, boolean cinematicWhiteFocus, boolean wifiStatusColor, int cinematicScrim, int cinematicArt,
-                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly,
-                    int openOnStartNetworkWait, boolean iconOnlyVpn, boolean googleAssistant, boolean showNotification) {
+                   Map<String, Set<String>> wallpaperMoods, boolean gamepadPassthrough, boolean consumeVolumeKeys, boolean powerOnHome, boolean homeLongPressHome, boolean wifiStatusWarnings, List<String> topBarApps, boolean showGreeting, boolean headerWhite, boolean clockWallpaper, int clockWallpaperDim, boolean clockGlow, String glassStyle, boolean singleRow, boolean dockBandAll, boolean lunarDate, int lunarUtcOffset, boolean dateBelowClock, boolean vpnPill, String locale, boolean powerOnHomeAlways, boolean inputsConnectedOnly, boolean inputsCecStateOnly,
+                   int openOnStartNetworkWait, boolean openOnStartOnWake, boolean iconOnlyVpn, String clockFormat, boolean backOpensClock, boolean glowSnap, boolean googleAssistant, boolean showNotification) {
         this.handleViewInputs = handleViewInputs;
         this.tileMenu = tileMenu;
         this.inputKeycodes = inputKeycodes;
@@ -335,6 +346,8 @@ final class Config {
         this.iconOnlyButtons = iconOnlyButtons;
         this.iconOnlyInputs = iconOnlyInputs;
         this.iconOnlyVpn = iconOnlyVpn;
+        this.backOpensClock = backOpensClock;
+        this.glowSnap = glowSnap;
         this.libraryButton = libraryButton;
         this.showLibraryPill = showLibraryPill;
         this.wifiLabelWidth = wifiLabelWidth;
@@ -384,7 +397,10 @@ final class Config {
         this.homeLongPressHome = homeLongPressHome;
         this.powerOnHomeAlways = powerOnHomeAlways;
         this.inputsConnectedOnly = inputsConnectedOnly;
+        this.inputsCecStateOnly = inputsCecStateOnly;
         this.openOnStartNetworkWait = openOnStartNetworkWait;
+        this.openOnStartOnWake = openOnStartOnWake;
+        this.clockFormat = clockFormat;
         this.wifiStatusWarnings = wifiStatusWarnings;
         this.topBarApps = Collections.unmodifiableList(topBarApps);
         this.showGreeting = showGreeting;
@@ -472,6 +488,7 @@ final class Config {
         boolean bootToLiveTv = res.getBoolean(R.bool.boot_to_live_tv);
         boolean openOnStartChoice = res.getBoolean(R.bool.open_on_start_choice);
         int openOnStartNetworkWait = res.getInteger(R.integer.open_on_start_network_wait);
+        boolean openOnStartOnWake = res.getBoolean(R.bool.open_on_start_on_wake);
         boolean dockTitle = res.getBoolean(R.bool.dock_title);
         boolean dockRow = res.getBoolean(R.bool.dock_row);
         boolean topMenu = res.getBoolean(R.bool.top_menu);
@@ -482,6 +499,8 @@ final class Config {
         boolean iconOnlyButtons = res.getBoolean(R.bool.icon_only_buttons);
         boolean iconOnlyInputs = res.getBoolean(R.bool.icon_only_inputs);
         boolean iconOnlyVpn = res.getBoolean(R.bool.icon_only_vpn);
+        boolean backOpensClock = res.getBoolean(R.bool.back_opens_clock);
+        boolean glowSnap = res.getBoolean(R.bool.glow_snap);
         boolean libraryButton = res.getBoolean(R.bool.library_button);
         boolean showLibraryPill = res.getBoolean(R.bool.show_library_pill);
         int wifiLabelWidth = res.getInteger(R.integer.wifi_label_width);
@@ -519,6 +538,8 @@ final class Config {
         boolean homeLongPressHome = res.getBoolean(R.bool.home_long_press_home);
         boolean powerOnHomeAlways = res.getBoolean(R.bool.power_on_home_always);
         boolean inputsConnectedOnly = res.getBoolean(R.bool.inputs_connected_only);
+        boolean inputsCecStateOnly = res.getBoolean(R.bool.inputs_cec_state_only);
+        String clockFormat = res.getString(R.string.clock_format);
         boolean dockGlass = res.getBoolean(R.bool.dock_glass);
         boolean dockEvenPadding = res.getBoolean(R.bool.dock_even_padding);
         boolean dockBand = res.getBoolean(R.bool.dock_band);
@@ -583,6 +604,7 @@ final class Config {
             bootToLiveTv = bool(json, "boot_to_live_tv", bootToLiveTv);
             openOnStartChoice = bool(json, "open_on_start_choice", openOnStartChoice);
             openOnStartNetworkWait = integer(json, "open_on_start_network_wait", openOnStartNetworkWait, 0, 600);
+            openOnStartOnWake = bool(json, "open_on_start_on_wake", openOnStartOnWake);
             dockTitle = bool(json, "dock_title", dockTitle);
             dockRow = bool(json, "dock_row", dockRow);
             topMenu = bool(json, "top_menu", topMenu);
@@ -593,6 +615,8 @@ final class Config {
             iconOnlyButtons = bool(json, "icon_only_buttons", iconOnlyButtons);
             iconOnlyInputs = bool(json, "icon_only_inputs", iconOnlyInputs);
             iconOnlyVpn = bool(json, "icon_only_vpn", iconOnlyVpn);
+            backOpensClock = bool(json, "back_opens_clock", backOpensClock);
+            glowSnap = bool(json, "glow_snap", glowSnap);
             libraryButton = bool(json, "library_button", libraryButton);
             showLibraryPill = bool(json, "show_library_pill", showLibraryPill);
             wifiLabelWidth = integer(json, "wifi_label_width", wifiLabelWidth, 0, 300);
@@ -630,6 +654,8 @@ final class Config {
             homeLongPressHome = bool(json, "home_long_press_home", homeLongPressHome);
             powerOnHomeAlways = bool(json, "power_on_home_always", powerOnHomeAlways);
             inputsConnectedOnly = bool(json, "inputs_connected_only", inputsConnectedOnly);
+            inputsCecStateOnly = bool(json, "inputs_cec_state_only", inputsCecStateOnly);
+            clockFormat = string(json, CLOCK_FORMAT_KEY, clockFormat);
             dockGlass = bool(json, "dock_glass", dockGlass);
             dockEvenPadding = bool(json, "dock_even_padding", dockEvenPadding);
             dockBand = bool(json, "dock_band", dockBand);
@@ -679,6 +705,7 @@ final class Config {
         int wallpaperDim = json == null ? 0 : integer(json, "wallpaper_dim", 0, 0, 90);
         int dockOpacity = json == null ? 100 : integer(json, "dock_opacity", 100, 30, 100);
         dockOpacity = chosenDockOpacity(choices.getInt(DOCK_OPACITY_KEY, -1), dockOpacity);
+        clockFormat = choices.getString(CLOCK_FORMAT_KEY, clockFormat);
         String wallpaperOrder = json == null ? WallpaperRotation.ORDER_SHUFFLE
                 : string(json, "wallpaper_order", WallpaperRotation.ORDER_SHUFFLE);
         // An unknown order must not silently change how an existing collection rotates.
@@ -706,7 +733,7 @@ final class Config {
 
         return new Config(dock, fillDock, hidden, libraryApps, libraryExcludedApps, liveTv, liveTvAction, liveTvInputId, packageMap(launchActions), packageMap(appLabels),
                 packageMap(appBanners), panelService, panelAction, panelExtra, coocaaSources, inputAction, inputSources, inputUriScheme, Math.max(1, columns),
-                Math.max(0, rowsBelow), animations, advancedEffects, shamsi, lunar, greetingName, moduleCards, reducedMotion, bootToLiveTv,
+                Math.max(0, rowsBelow), animations, advancedEffects, shamsi, greetingName, moduleCards, reducedMotion, bootToLiveTv,
                 openOnStartChoice, dockTitle, dockRow, topMenu, launcherSettingsButton, reorderButton, showNetworkPill, showInputsPill,
                 iconOnlyButtons, iconOnlyInputs, libraryButton, showLibraryPill, wifiLabelWidth, alwaysShowNames, wallpaperTrueColor, focusOvershoot,
                 vpn, homeSettings, showStats, gameDay, library, librarySelection, libraryOkOpens, uniformTiles, background,
@@ -716,9 +743,9 @@ final class Config {
                 Math.max(0, idleClockMinutes), keyFilter, dockGlass, glowStyle, wallpaperCaptions, handleViewInputs, tileMenu, dockEvenPadding,
                 dockBand, cinematicDots, cinematicWhiteFocus, wifiStatusColor, cinematicScrim, cinematicArt, wallpaperMoods, gamepadPassthrough,
                 consumeVolumeKeys, powerOnHome, homeLongPressHome, wifiStatusWarnings, topBarApps, showGreeting, headerWhite, clockWallpaper,
-                Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunarOffset,
-                dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly,
-                Math.max(0, Math.min(600, openOnStartNetworkWait)), iconOnlyVpn, googleAssistant, showNotification);
+                Math.max(0, Math.min(90, clockWallpaperDim)), clockGlow, glassStyle, singleRow && dockRow, dockBandAll, lunar, lunarOffset,
+                dateBelowClock, vpnPill, locale, powerOnHomeAlways, inputsConnectedOnly, inputsCecStateOnly,
+                Math.max(0, Math.min(600, openOnStartNetworkWait)), openOnStartOnWake, iconOnlyVpn, clockFormat, backOpensClock, glowSnap, googleAssistant, showNotification);
     }
 
     /**
@@ -762,12 +789,12 @@ final class Config {
             SharedPreferences.Editor editor = choices.edit();
             if (!"absent".equals(token)) editor.remove("columns").remove("animations")
                     .remove("advanced_effects").remove(ROWS_BELOW_DOCK_KEY).remove(WALLPAPER_CHOICE_KEY)
-                    .remove(DOCK_OPACITY_KEY);
+                    .remove(DOCK_OPACITY_KEY).remove(CLOCK_FORMAT_KEY);
             editor.putString(THEME_SIGNATURE_KEY, signature).commit();
         } else if (!seen.equals(signature)) {
             choices.edit().remove("columns").remove("animations").remove("advanced_effects")
                     .remove(ROWS_BELOW_DOCK_KEY).remove(WALLPAPER_CHOICE_KEY).remove(DOCK_OPACITY_KEY)
-                    .putString(THEME_SIGNATURE_KEY, signature).commit();
+                    .remove(CLOCK_FORMAT_KEY).putString(THEME_SIGNATURE_KEY, signature).commit();
         }
     }
 
