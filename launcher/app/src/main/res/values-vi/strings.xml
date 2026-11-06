@@ -156,4 +156,7 @@
     <string name="clock_format_system">Hệ thống</string>
     <string name="clock_format_12">12 giờ</string>
     <string name="clock_format_24">24 giờ</string>
+    <string name="drive_sync_now">Google Drive: Đồng bộ ngay</string>
+    <string name="drive_sync_queued">Đã lên lịch đồng bộ; đang chờ mạng</string>
+    <string name="drive_sync_disabled">Google Drive đang tắt hoặc cấu hình chưa đúng</string>
 </resources>

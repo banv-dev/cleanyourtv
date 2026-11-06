@@ -726,6 +726,13 @@ final class Config {
             wallpaper = chosen.isEmpty() ? null : chosen.get(0);
             wallpaperEnabled = !chosen.isEmpty();
         }
+        DriveConfig drive = DriveConfig.parse(ctx, json);
+        if (drive.displaysCache()) {
+            wallpapers.clear();
+            if (wallpaperEnabled && !"none".equals(wallpaperChoice)) wallpapers.addAll(DriveImageCache.playable(ctx, drive, rotationMinutes, wallpaperChoice));
+            wallpaper = wallpapers.isEmpty() ? null : wallpapers.get(0);
+            wallpaperOrder = WallpaperRotation.ORDER_SEQUENTIAL;
+        }
         // A festive skin comes only from a theme; config.xml has no festival. seasonal_skin names one the same way
         // but launchers before it ignore the key, so a theme can carry it without older ones showing the diya skin.
         Festival festival = json == null ? Festival.NONE : Festival.parse(festivalName(json),
@@ -824,7 +831,7 @@ final class Config {
      * start before the card is mounted (seen at every boot on a Xiaomi MiTV-MTEQ0), and without the copy it comes
      * up with the built-in dock order. A missing file on mounted storage still means no overlay.
      */
-    private static JSONObject readOverlay(Context ctx, File file, boolean mounted) {
+    static synchronized JSONObject readOverlay(Context ctx, File file, boolean mounted) {
         File copy = new File(ctx.getFilesDir(), FILE_NAME);
         if (!mounted) return read(copy);
         JSONObject json = read(file);

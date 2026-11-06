@@ -257,4 +257,7 @@
     <string name="clock_format_system">System</string>
     <string name="clock_format_12">12-hour</string>
     <string name="clock_format_24">24-hour</string>
+    <string name="drive_sync_now">Google Drive: Sync now</string>
+    <string name="drive_sync_queued">Sync queued; waiting for network</string>
+    <string name="drive_sync_disabled">Google Drive is disabled or misconfigured</string>
 </resources>

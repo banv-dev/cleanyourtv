@@ -1,0 +1,11 @@
+{
+  "wallpaper": true,
+  "wallpaper_rotation_minutes": 5,
+  "wallpaper_dim": 20,
+  "googleDrive": {
+    "enabled": true,
+    "folderId": "",
+    "syncInterval": 360,
+    "syncOnLaunch": true
+  }
+}

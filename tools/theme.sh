@@ -158,6 +158,8 @@ case "$(theme_json_kind "$THEME/config.json")" in
   *) echo "$THEME/config.json is not valid JSON, so there is no theme to push (themes/README.md says what the" \
     "file holds). Nothing was sent to the TV." >&2; exit 2 ;;
 esac
+"$PY" -I theme_drive.py "$THEME/config.json" || exit 2
+
 # Every collection name is checked before anything changes on the TV: a name refused halfway through the push
 # left the new config.json and part of the collection behind. b64push.py refuses a path with '..' in it, so
 # such a name (sunset..jpg) is refused here too. The names that pass have no spaces, so NAMES splits on them.

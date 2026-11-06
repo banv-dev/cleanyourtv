@@ -62,6 +62,9 @@ QUERIES_PACKAGE = re.compile(r'<package\s+android:name="([^"]+)"')
 # The keys read from config.xml on purpose that the table must not list, each with the page that
 # documents it instead.
 EXEMPT = {
+    "drive_cache_max_size_mb": "launcher/DRIVE_IMAGES.md: resource-only cache limit",
+    "drive_max_file_size_mb": "launcher/DRIVE_IMAGES.md: resource-only file limit",
+    "drive_supported_mime_types": "launcher/DRIVE_IMAGES.md: resource-only MIME whitelist",
     "latitude": "docs/sky.md: the sky's place, a build setting no theme can move",
     "longitude": "docs/sky.md: the sky's place, a build setting no theme can move",
 }
@@ -255,6 +258,11 @@ class KeysTableCoversConfigXmlTest(unittest.TestCase):
         for name in EXEMPT:
             with self.subTest(key=name):
                 self.assertIn(name, config, f"`{name}` is gone from config.xml: drop its EXEMPT entry")
+                if name.startswith("drive_"):
+                    drive = (JAVA_DIR / "DriveConfig.java").read_text(encoding="utf-8")
+                    self.assertRegex(drive, rf"R\.(?:integer|string)\.{name}")
+                    self.assertIn(name, (ROOT / "launcher/DRIVE_IMAGES.md").read_text(encoding="utf-8"))
+                    continue
                 self.assertIn(f"R.string.{name}", sky, f"SkyView.java no longer reads `{name}`: is the "
                                                       f"docs/sky.md page still right?")
                 self.assertNotIn(name, table_keys(self.text),

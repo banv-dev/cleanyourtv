@@ -21,6 +21,9 @@
             android:textColor="#FFFFFFFF"
             android:textSize="34sp" />
 
+        <TextView android:id="@+id/driveSyncChoice" style="@style/SettingsRow"
+            android:text="@string/drive_sync_now" android:visibility="gone" />
+
         <TextView
             android:id="@+id/reorderChoice"
             style="@style/SettingsRow"

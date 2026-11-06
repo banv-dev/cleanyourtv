@@ -111,6 +111,9 @@ if ($themeJson -isnot [System.Management.Automation.PSCustomObject]) {
     [Console]::Error.WriteLine("$config is not a JSON object of theme keys, so the launcher would ignore it and the TV would go back to its built-in config (themes/README.md). Nothing was sent to the TV.")
     exit 2
 }
+& $py -I theme_drive.py $config
+if ($LASTEXITCODE -ne 0) { exit 2 }
+
 # Every collection name is checked before anything changes on the TV, as in theme.sh: a name refused halfway
 # through the push left the new config.json and part of the collection behind. b64push.py refuses '..' in a path.
 $wallpapers = Join-Path $Theme 'wallpapers'

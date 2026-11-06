@@ -126,6 +126,15 @@ public final class LauncherSettingsActivity extends Activity {
             reverseRow(dockChoices);
             reverseRow(clockChoices);
         }
+        TextView driveSync = findViewById(R.id.driveSyncChoice);
+        driveSync.setVisibility(DriveConfig.load(this).enabled ? View.VISIBLE : View.GONE);
+        driveSync.setOnClickListener(v -> {
+            DriveSync.schedule(this, false);
+            boolean queued = DriveSync.now(this);
+            String status = getSharedPreferences("drive_sync", MODE_PRIVATE).getString("status", "");
+            Toast.makeText(this, getString(queued ? R.string.drive_sync_queued : R.string.drive_sync_disabled)
+                    + (status.isEmpty() ? "" : " — " + status), Toast.LENGTH_LONG).show();
+        });
         wallpaperChoice = findViewById(R.id.wallpaperChoice);
         wallpaperChoice.setOnClickListener(v -> showWallpaperPicker());
         themeChoice = findViewById(R.id.themeChoice);
@@ -196,6 +205,12 @@ public final class LauncherSettingsActivity extends Activity {
                 dir == null ? null : new File(dir, "wallpapers")));
         // A theme with a single wallpaper.jpg offers that picture too (Config maps the choice back to it).
         File single = dir == null ? null : new File(dir, Config.WALLPAPER_NAME);
+        DriveConfig drive = DriveConfig.load(this);
+        if (drive.displaysCache()) {
+            images.clear();
+            images.addAll(DriveImageCache.collection(this, drive));
+            single = DriveImageCache.wallpaper(this, drive);
+        }
         if (single != null && single.isFile()) images.add(0, single);
         String[] labels = new String[images.size() + 1];
         for (int i = 0; i < images.size(); i++) labels[i] = images.get(i).getName();
@@ -241,6 +256,7 @@ public final class LauncherSettingsActivity extends Activity {
                     choices.edit().putString("selected_theme", next).remove(Config.WALLPAPER_CHOICE_KEY)
                             .remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations")
                             .remove("advanced_effects").apply();
+                    DriveSync.schedule(this, false);
                     changed();
                     Toast.makeText(this, R.string.theme_applied, Toast.LENGTH_SHORT).show();
                     finish();
