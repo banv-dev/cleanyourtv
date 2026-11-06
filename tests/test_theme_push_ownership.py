@@ -128,7 +128,7 @@ class ThemePushTest(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.base, ignore_errors=True)
         self.tools = self.base / "tools"
         self.tools.mkdir()
-        for name in ("theme.sh", "theme_drive.py", "b64push.py", "theme_restart.py"):
+        for name in ("theme.sh", "b64push.py", "theme_restart.py"):
             shutil.copy2(TOOLS / name, self.tools / name)
         (self.tools / "tv.py").write_text(FAKE_TV)
         venv = self.tools / "venv" / "bin"

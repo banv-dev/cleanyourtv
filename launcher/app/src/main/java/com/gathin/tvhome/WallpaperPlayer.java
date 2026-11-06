@@ -137,6 +137,7 @@ final class WallpaperPlayer {
                 }
                 return;
             }
+            if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode initial image rejected; trying another cached image");
             files.remove(first);   // unreadable or over 4K: try another, or keep the plain colour
             playable = playable();
             first = WallpaperRotation.pick(playable, previous, order, random);
@@ -239,7 +240,8 @@ final class WallpaperPlayer {
                 }
                 if (bitmap == null) {
                     files.remove(next);
-                    Log.w("TvHome.Wallpaper", "Skipping unreadable image: " + next.getName());
+                    if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode cached image rejected; trying another");
+                    else Log.w("TvHome.Wallpaper", "Skipping unreadable image: " + next.getName());
                     update();
                     return;
                 }
@@ -329,9 +331,15 @@ final class WallpaperPlayer {
             options.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(file.getPath(), options);
             int width = options.outWidth, height = options.outHeight;
-            if (width <= 0 || height <= 0) return null;
+            if (width <= 0 || height <= 0) {
+                if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode reason=invalid-image-bounds");
+                return null;
+            }
             int sample = WallpaperSize.sampleSize(width, height, this.width, this.height);
-            if (!WallpaperSize.accepted(width / sample, height / sample)) return null;
+            if (!WallpaperSize.accepted(width / sample, height / sample)) {
+                if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode reason=pixel-limit width=" + width + " height=" + height + " sample=" + sample);
+                return null;
+            }
             options.inJustDecodeBounds = false;
             options.inSampleSize = sample;
             int[] scale = WallpaperSize.coverScale(width / sample, height / sample, this.width, this.height);
@@ -343,7 +351,11 @@ final class WallpaperPlayer {
             options.inPreferredConfig = bitmapConfig;
             options.inMutable = dimColor != 0;
             Bitmap decoded = BitmapFactory.decodeFile(file.getPath(), options);
-            if (decoded == null) return null;
+            if (decoded == null) {
+                if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode reason=bitmap-decoder-returned-null");
+                return null;
+            }
+            if (drive.displaysCache()) DriveLog.event("stage=wallpaper.decode bitmap ready width=" + decoded.getWidth() + " height=" + decoded.getHeight());
             if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
             // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
             // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
@@ -352,6 +364,7 @@ final class WallpaperPlayer {
             decoded.recycle();
             return gpu;
         } catch (Exception | OutOfMemoryError failure) {
+            if (drive.displaysCache()) DriveLog.failure("wallpaper.decode", failure);
             return null;
         }
     }

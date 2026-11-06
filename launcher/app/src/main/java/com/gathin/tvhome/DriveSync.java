@@ -22,7 +22,7 @@ final class DriveSync {
         if (launching) DriveImageCache.markUsed(context, config);
         JobScheduler scheduler = context.getSystemService(JobScheduler.class);
         if (scheduler == null) { DriveLog.event("stage=schedule JobScheduler unavailable"); return; }
-        DriveLog.event("stage=schedule theme=" + config.themeId + " enabled=" + config.enabled
+        DriveLog.event("stage=schedule source=" + (config.folderId.isEmpty() ? "local" : "GoogleDrive") + " enabled=" + config.enabled
                 + " intervalMinutes=" + config.intervalMinutes + " effectivePeriodicMinutes="
                 + (config.intervalMinutes == 0 ? 0 : Math.max(15, config.intervalMinutes))
                 + " syncOnLaunch=" + config.syncOnLaunch + " launching=" + launching);

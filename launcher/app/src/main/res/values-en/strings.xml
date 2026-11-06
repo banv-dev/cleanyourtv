@@ -123,4 +123,11 @@
     <string name="drive_progress_partial">Sync incomplete: %1$d%% (%2$d/%3$d images). Check images/captions and storage.</string>
     <string name="drive_progress_empty">Sync complete: no supported images in the folder.</string>
     <string name="drive_progress_error">Image sync failed; keeping cached files. Check network and Drive settings.</string>
+    <string name="drive_theme_source">Google Drive</string>
+    <string name="drive_theme_unnamed">Theme</string>
+    <string name="drive_theme_loading">Loading themes from Google Drive…</string>
+    <string name="drive_theme_config_error">Configure a valid Google Drive theme library folder.</string>
+    <string name="drive_theme_empty">No theme subfolders found.</string>
+    <string name="drive_theme_load_error">Cannot load themes. Check network and Drive sharing.</string>
+    <string name="drive_theme_cached_catalog">Using the saved Drive theme list.</string>
 </resources>

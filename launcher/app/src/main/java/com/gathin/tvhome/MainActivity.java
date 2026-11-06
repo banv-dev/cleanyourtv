@@ -121,6 +121,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String liveTvPkg;
     /** Launcher settings' change count this Home was built with (see onResume). */
     private long settingsRevision;
+    private final Runnable driveThemeChanged = this::onDriveThemeChanged;
     /** Idle time on Home before ClockActivity; 0 is off (config.xml, home_idle_clock_minutes). */
     private long idleClockMs;
     /** Back on Home opens ClockActivity (config.xml, back_opens_clock). */
@@ -1153,6 +1154,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             recreate();
             return;
         }
+        DriveSync.listen(driveThemeChanged);
         restartIdleClock();
         promptsPaused = false;
         if (grid.getAdapter() == null) grid.setAdapter(adapter);   // dropped by onTrimMemory
@@ -1202,6 +1204,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /** Launcher settings' change count (Config.SETTINGS_REVISION_KEY); onResume rebuilds Home when it moved. */
+    private void onDriveThemeChanged() {
+        if (resumed && Config.settingsChanged(settingsRevision, settingsRevision())) recreate();
+    }
+
     private long settingsRevision() {
         return getSharedPreferences(Config.SETTINGS_NAME, MODE_PRIVATE).getLong(Config.SETTINGS_REVISION_KEY, 0);
     }
@@ -1358,6 +1364,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onPause() {
         super.onPause();
         resumed = false;
+        DriveSync.unlisten(driveThemeChanged);
         // No UP reaches a paused Home, so a vendor-key hold it saw go down would still open its app later.
         // Only Home's own share is dropped: a key service that saw the same DOWN keeps its hold.
         RemoteKeys.release(this);

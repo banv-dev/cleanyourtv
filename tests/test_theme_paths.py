@@ -75,12 +75,11 @@ class ThemePathsTest(unittest.TestCase):
         tools = repo / "tools"
         tools.mkdir(parents=True)
         shutil.copy2(ROOT / "tools" / "theme.sh", tools / "theme.sh")
-        shutil.copy2(ROOT / "tools" / "theme_drive.py", tools / "theme_drive.py")
         client = tools / "venv" / "bin" / "python"
         client.parent.mkdir(parents=True)
         client.write_text(
             '#!/bin/sh\n'
-            'if [ "$1" = "-I" ] && { [ "$2" = "-c" ] || [ "$2" = "theme_drive.py" ]; }; then\n'
+            'if [ "$1" = "-I" ] && [ "$2" = "-c" ]; then\n'
             f'  exec "{Path(sys.executable).as_posix()}" "$@"\n'
             'fi\n'
             'shift\n'

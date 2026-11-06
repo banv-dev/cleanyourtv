@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Cấu hình thư viện theme Google Drive dùng chung cho ứng dụng.
+Các giá trị này được đóng gói trong APK; sau khi sửa cần build và cài lại APK.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="MissingTranslation">
+    <!-- Tổng dung lượng cache của tất cả theme Drive, đơn vị MB (1 MB = 1.048.576 byte).
+         Cache còn trong hạn retention không bị xóa sớm để nhường chỗ;
+         nếu hết dung lượng, lần đồng bộ mới có thể chỉ hoàn thành một phần. -->
+    <integer name="drive_cache_max_size_mb">300</integer>
+    <!-- Dung lượng tối đa của một file tải về, đơn vị MB (1 MB = 1.048.576 byte).
+         config.json có giới hạn riêng 64 KB; wallpapers/captions.txt tối đa 256 KB.
+         Với hai file này, ứng dụng áp dụng giới hạn nhỏ hơn giữa mức riêng và setting này. -->
+    <integer name="drive_max_file_size_mb">20</integer>
+    <!-- Các MIME type ảnh được phép hiển thị làm wallpaper, phân cách bằng dấu phẩy.
+         Hỗ trợ JPEG, PNG và WebP; đây không phải danh sách phần mở rộng tên file.
+         Theme vẫn đồng bộ các file tài nguyên khác trong thư mục. -->
+    <string name="drive_supported_mime_types" translatable="false">image/jpeg,image/png,image/webp</string>
+
+    <!-- ID thư mục thư viện theme trên Drive, lấy từ URL /drive/folders/ID; không nhập cả URL.
+         Mỗi thư mục con trực tiếp là một theme đầy đủ, bắt buộc có config.json ở gốc.
+         Chia sẻ thư mục thư viện cho service account với quyền Viewer, giữ quyền truy cập Restricted.
+         Trong Settings → Theme, chọn trực tiếp mục gDrive-{tên thư mục con} cần sử dụng. -->
+    <string name="drive_theme_dir" translatable="false">1i-E6ZAWHS9NikETE7-ys0sebYcX9vmle</string>
+    <!-- Khoảng thời gian giữa các lần đồng bộ định kỳ của theme đang chọn, đơn vị phút.
+         0 = tắt đồng bộ định kỳ; giá trị dương dưới 15 được Android nâng lên tối thiểu 15 phút.
+         Thời điểm chạy thực tế có thể trễ do điều kiện mạng hoặc chế độ tiết kiệm điện. -->
+    <integer name="drive_sync_interval">5</integer>
+    <!-- true = yêu cầu đồng bộ nền mỗi lần mở Home với theme Drive đang được chọn.
+         false = không tự đồng bộ khi mở Home; lịch định kỳ và nút Sync now vẫn hoạt động.
+         Chọn một theme chưa có snapshot cache trong Settings vẫn yêu cầu tải ban đầu,
+         kể cả khi setting này là false. Các lần đồng bộ thông thường không hiện progress Toast. -->
+    <bool name="drive_sync_on_launch">true</bool>
+    <!-- Số ngày không sử dụng trước khi cache của một theme không còn được chọn có thể bị xóa.
+         Phải là số nguyên dương; mở hoặc sử dụng theme sẽ cập nhật thời điểm sử dụng gần nhất.
+         Đồng bộ nền không gia hạn thời gian này; cache theme đang chọn luôn được bảo vệ.
+         Việc dọn cache hết hạn diễn ra trong lần đồng bộ liệt kê thành công tiếp theo,
+         nên có thể muộn hơn thời hạn. Chuyển theme không xóa ngay cache của theme trước đó. -->
+    <integer name="drive_cache_retention_days">30</integer>
+</resources>

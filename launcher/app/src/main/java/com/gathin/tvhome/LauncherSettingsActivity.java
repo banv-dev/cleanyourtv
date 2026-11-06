@@ -127,7 +127,6 @@ public final class LauncherSettingsActivity extends Activity {
             reverseRow(clockChoices);
         }
         TextView driveSync = findViewById(R.id.driveSyncChoice);
-        driveSync.setVisibility(DriveConfig.load(this).enabled ? View.VISIBLE : View.GONE);
         driveSync.setOnClickListener(v -> {
             DriveSync.schedule(this, false);
             boolean queued = DriveSync.now(this);
@@ -241,29 +240,122 @@ public final class LauncherSettingsActivity extends Activity {
                 .show();
     }
 
-    private void showThemePicker() {
-        List<String> themes = Config.installedThemes(this);
-        String[] labels = new String[themes.size() + 1];
-        labels[0] = getString(R.string.theme_builtin);
-        for (int i = 0; i < themes.size(); i++) labels[i + 1] = themes.get(i);
+    private final java.util.concurrent.ExecutorService driveThemeLoader = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private java.util.concurrent.Future<?> driveThemeRequest;
+
+    interface DriveFolderLoader { List<org.json.JSONObject> load(String parent) throws Exception; }
+    DriveFolderLoader driveFolderLoader = parent -> new DriveImageRepository(new DriveAuthManager(this), () -> {
+        if (Thread.currentThread().isInterrupted()) throw new java.io.IOException("Cancelled");
+    }).folders(parent);
+
+    private static final class ThemeEntry {
+        final String key, label;
+        ThemeEntry(String key, String label) { this.key = key; this.label = label; }
+    }
+    private List<ThemeEntry> themeEntries(List<org.json.JSONObject> folders) {
+        List<ThemeEntry> result = new ArrayList<>();
+        result.add(new ThemeEntry("", getString(R.string.theme_builtin)));
+        for (String local : Config.installedThemes(this)) result.add(new ThemeEntry(local, local));
+        for (org.json.JSONObject folder : folders) {
+            String id = folder.optString("id");
+            if (DriveConfig.validId(id)) result.add(new ThemeEntry(DriveThemes.selection(id), "gDrive-" + folder.optString("name")));
+        }
         String selected = choices.getString("selected_theme", "");
-        int checked = selected == null || selected.isEmpty() ? 0 : themes.indexOf(selected) + 1;
-        new AlertDialog.Builder(this).setTitle(R.string.theme_label)
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    dialog.dismiss();
-                    String next = which == 0 ? "" : themes.get(which - 1);
-                    if (next.equals(selected)) return;
-                    choices.edit().putString("selected_theme", next).remove(Config.WALLPAPER_CHOICE_KEY)
-                            .remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations")
-                            .remove("advanced_effects").apply();
-                    DriveConfig selectedDrive = DriveConfig.load(this);
-                    DriveProgress.themeSelected(this, selectedDrive);
-                    DriveImageCache.markUsed(this, selectedDrive);
-                    DriveSync.schedule(this, false);
-                    changed();
-                    Toast.makeText(this, R.string.theme_applied, Toast.LENGTH_SHORT).show();
-                    finish();
-                }).setNegativeButton(android.R.string.cancel, null).show();
+        if (!DriveThemes.folderId(selected).isEmpty() && entryIndex(result, selected) < 0)
+            result.add(new ThemeEntry(selected, DriveThemes.label(this, selected)));
+        return result;
+    }
+    private static int entryIndex(List<ThemeEntry> entries, String key) {
+        for (int i = 0; i < entries.size(); i++) if (entries.get(i).key.equals(key)) return i;
+        return -1;
+    }
+    private static List<String> entryLabels(List<ThemeEntry> entries) {
+        List<String> labels = new ArrayList<>();
+        for (ThemeEntry entry : entries) labels.add(entry.label);
+        return labels;
+    }
+    private static boolean sameEntries(List<ThemeEntry> first, List<ThemeEntry> second) {
+        if (first.size() != second.size()) return false;
+        for (int i = 0; i < first.size(); i++)
+            if (!first.get(i).key.equals(second.get(i).key) || !first.get(i).label.equals(second.get(i).label)) return false;
+        return true;
+    }
+    private void showThemePicker() {
+        if (driveThemeRequest != null) driveThemeRequest.cancel(true);
+        List<ThemeEntry> entries = new ArrayList<>(themeEntries(DriveThemes.catalog(this)));
+        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(this,
+                android.R.layout.simple_list_item_single_choice, new ArrayList<>(entryLabels(entries)));
+        String selected = choices.getString("selected_theme", "");
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle(R.string.theme_label)
+                .setSingleChoiceItems(adapter, entryIndex(entries, selected), (picker, which) -> {
+                    if (which < 0 || which >= entries.size()) return;
+                    String key = entries.get(which).key; // stable source key, never the label/index from an older list
+                    picker.dismiss();
+                    applyTheme(key);
+                }).setNegativeButton(android.R.string.cancel, null).create();
+        dialog.setOnDismissListener(picker -> { if (driveThemeRequest != null) driveThemeRequest.cancel(true); });
+        dialog.show();
+        String parent = getString(R.string.drive_theme_dir).trim();
+        if (!DriveConfig.validId(parent) || !DriveConfig.forFolder(this, parent).error.isEmpty()) return;
+        if (DriveThemes.catalog(this).isEmpty()) dialog.setTitle(R.string.drive_theme_loading);
+        driveThemeRequest = driveThemeLoader.submit(() -> {
+            List<org.json.JSONObject> folders;
+            try {
+                folders = driveFolderLoader.load(parent);
+                if (Thread.currentThread().isInterrupted()) return;
+                DriveThemes.saveCatalog(this, folders);
+            } catch (Exception failure) {
+                if (Thread.currentThread().isInterrupted()) return;
+                DriveLog.failure("themes.catalog", failure);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed() || !dialog.isShowing()) return;
+                    dialog.setTitle(R.string.theme_label);
+                    if (DriveThemes.catalog(this).isEmpty()) Toast.makeText(this, R.string.drive_theme_load_error, Toast.LENGTH_LONG).show();
+                });
+                return;
+            }
+            List<org.json.JSONObject> fresh = folders;
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || !dialog.isShowing()) return;
+                dialog.setTitle(R.string.theme_label);
+                refresh(); // update the currently selected folder's label if it was renamed
+                List<ThemeEntry> updated = themeEntries(fresh);
+                if (sameEntries(entries, updated)) return;
+                android.widget.ListView list = dialog.getListView();
+                int position = list.getSelectedItemPosition();
+                String focusedKey = position >= 0 && position < entries.size() ? entries.get(position).key : null;
+                entries.clear(); entries.addAll(updated);
+                adapter.setNotifyOnChange(false); adapter.clear(); adapter.addAll(entryLabels(entries)); adapter.notifyDataSetChanged();
+                list.clearChoices();
+                int checked = entryIndex(entries, choices.getString("selected_theme", ""));
+                if (checked >= 0) list.setItemChecked(checked, true);
+                if (position >= 0) {
+                    int restored = focusedKey == null ? -1 : entryIndex(entries, focusedKey);
+                    list.setSelection(restored >= 0 ? restored : Math.min(position, entries.size() - 1));
+                }
+            });
+        });
+    }
+
+    private void applyTheme(String next) {
+        String selected = choices.getString("selected_theme", "");
+        if (next.equals(selected)) { refresh(); return; }
+        choices.edit().putString("selected_theme", next).remove(Config.WALLPAPER_CHOICE_KEY)
+                .remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations").remove("advanced_effects").apply();
+        DriveConfig drive = DriveConfig.load(this);
+        DriveProgress.themeSelected(this, drive);
+        DriveImageCache.markUsed(this, drive);
+        DriveSync.schedule(this, false);
+        if (drive.enabled && DriveImageCache.publishedDirectory(this, drive) == null) DriveSync.now(this);
+        changed();
+        Toast.makeText(this, R.string.theme_applied, Toast.LENGTH_SHORT).show();
+        finish();
+    }
+
+    @Override protected void onDestroy() {
+        if (driveThemeRequest != null) driveThemeRequest.cancel(true);
+        driveThemeLoader.shutdownNow();
+        super.onDestroy();
     }
 
     private void showLanguagePicker() {
@@ -384,8 +476,9 @@ public final class LauncherSettingsActivity extends Activity {
         advancedChoice.setAlpha(animations ? 1f : 0.5f);
         String wallpaperCurrent = choices.getString(Config.WALLPAPER_CHOICE_KEY, null);
         String themeCurrent = choices.getString("selected_theme", "");
+        findViewById(R.id.driveSyncChoice).setVisibility(DriveThemes.folderId(themeCurrent).isEmpty() ? View.GONE : View.VISIBLE);
         themeChoice.setText(getString(R.string.theme_state, themeCurrent == null || themeCurrent.isEmpty()
-                ? getString(R.string.theme_builtin) : themeCurrent));
+                ? getString(R.string.theme_builtin) : DriveThemes.label(this, themeCurrent)));
         String configuredLocale = Config.load(this).locale;
         String language = choices.getString("language", configuredLocale.isEmpty() ? "system" : configuredLocale);
         String languageName = "system".equals(language) ? getString(R.string.language_system)

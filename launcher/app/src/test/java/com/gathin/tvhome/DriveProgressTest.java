@@ -39,8 +39,9 @@ public class DriveProgressTest {
     @After public void tearDown() { presenter.stop(); }
     private void selectSource(String folder) throws Exception {
         File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();
-        Files.write(new File(dir, com.gathin.tvhome.Config.FILE_NAME).toPath(), new JSONObject()
-                .put("googleDrive", new JSONObject().put("folderId", folder)).toString().getBytes(StandardCharsets.UTF_8));
+        DriveThemes.remember(context, folder, folder);
+        context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit()
+                .putString("selected_theme", DriveThemes.selection(folder)).apply();
     }
     private void idle() { org.robolectric.Shadows.shadowOf(Looper.getMainLooper()).idle(); }
     @SuppressWarnings("deprecation")
@@ -74,7 +75,7 @@ public class DriveProgressTest {
     }
     @Test public void sourceChangesSuppressOldThemeProgress() throws Exception {
         presenter.start();
-        DriveConfig other = DriveConfig.parse(context, new JSONObject().put("googleDrive", new JSONObject().put("folderId", "other")));
+        DriveConfig other = DriveConfig.forFolder(context, "other");
         DriveProgress.update(other, DriveProgress.Phase.IMAGES, 1, 2); idle();
         assertEquals(0, ShadowToast.shownToastCount());
         selectSource("other");
@@ -102,7 +103,7 @@ public class DriveProgressTest {
         assertEquals(1, ShadowToast.shownToastCount());
     }
     @Test public void ordinaryHomeLaunchDoesNotShowProgressEvenWithEmptyCache() {
-        DriveConfig disabled = DriveConfig.parse(context, new JSONObject());
+        DriveConfig disabled = DriveConfig.forFolder(context, "");
         DriveProgress.themeSelected(context, disabled); // clear any pending Settings request
         presenter.start();
         DriveProgress.update(config, DriveProgress.Phase.IMAGES, 1, 3); idle();

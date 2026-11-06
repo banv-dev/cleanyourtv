@@ -78,45 +78,45 @@ final class DriveImageRepository {
         }
     }
 
-    /** A Drive folder mirrors a local theme: wallpaper.jpg plus optional wallpapers/ (one level only). */
-    List<JSONObject> list(DriveConfig config) throws Exception {
-        verifyFolder(config.folderId);
-        List<JSONObject> root = listFolder(config.folderId);
+    /** Catalog contains immediate child folders of the configured Drive theme library. */
+    List<JSONObject> folders(String parent) throws Exception {
+        if (!DriveConfig.validId(parent)) throw new IOException("Invalid Drive library");
+        verifyFolder(parent);
         List<JSONObject> result = new ArrayList<>();
-        String collection = null;
-        Set<String> paths = new HashSet<>();
-        for (JSONObject item : root) {
-            String name = item.optString("name");
-            if ("wallpapers".equals(name) && "application/vnd.google-apps.folder".equals(item.optString("mimeType"))) {
-                if (collection != null) throw new IOException("Ambiguous wallpapers folder");
-                collection = item.getString("id");
-            } else if ("wallpaper.jpg".equals(name) && config.mimeTypes.contains(item.optString("mimeType"))) {
-                addImage(result, paths, item, "wallpaper.jpg");
-            }
-        }
-        if (collection != null) {
-            verifyFolder(collection);
-            for (JSONObject item : listFolder(collection)) {
-                if (WallpaperCaptions.FILE_NAME.equals(item.optString("name")) && DriveImageCache.captionMime(item.optString("mimeType"))) {
-                    DriveLog.event("stage=list optional captions present");
-                    addImage(result, paths, item, DriveImageCache.CAPTIONS_PATH);
-                    continue;
-                }
-                if (!config.mimeTypes.contains(item.optString("mimeType")) || WallpaperCaptions.FILE_NAME.equals(item.optString("name"))) continue;
-                String path = "wallpapers/" + item.optString("name");
-                if (DriveImageCache.validThemePath(path)) addImage(result, paths, item, path);
-                else DriveLog.event("stage=list skipping unsupported collection filename (name hidden)");
-            }
-        }
-        result.sort((a, b) -> naturalCompare(a.optString("themePath"), b.optString("themePath")));
-        DriveLog.event("stage=list theme complete assets=" + result.size() + " hasCollection=" + (collection != null));
-        if (result.isEmpty()) DriveLog.event("stage=list no theme images; expected wallpaper.jpg or wallpapers/ under configured root");
+        for (JSONObject item : listFolder(parent))
+            if ("application/vnd.google-apps.folder".equals(item.optString("mimeType"))) result.add(item);
+        result.sort((a, b) -> naturalCompare(a.optString("name"), b.optString("name")));
         return result;
     }
-
-    private static void addImage(List<JSONObject> result, Set<String> paths, JSONObject item, String path) throws Exception {
-        if (!paths.add(path)) throw new IOException("Duplicate theme image path");
-        result.add(new JSONObject(item.toString()).put("themePath", path));
+    /** Full recursive theme snapshot; reject ambiguous paths/shortcuts before touching published data. */
+    List<JSONObject> list(DriveConfig config) throws Exception {
+        List<JSONObject> result = new ArrayList<>();
+        walk(config.folderId, "", result, new HashSet<>(), new HashSet<>(), 0);
+        boolean hasConfig = false;
+        for (JSONObject item : result) if ("config.json".equals(item.optString("themePath")) && !item.optBoolean("directory")) hasConfig = true;
+        if (!hasConfig) throw new IOException("Theme config unavailable");
+        result.sort((a, b) -> naturalCompare(a.optString("themePath"), b.optString("themePath")));
+        DriveLog.event("stage=list full theme complete assets=" + result.size());
+        return result;
+    }
+    private void walk(String folder, String prefix, List<JSONObject> result, Set<String> paths, Set<String> folders, int depth) throws Exception {
+        if (depth > 16 || !folders.add(folder)) throw new IOException("Invalid theme folder tree");
+        verifyFolder(folder);
+        for (JSONObject item : listFolder(folder)) {
+            check.check();
+            if (result.size() >= 10000) throw new IOException("Theme has too many files");
+            String path = prefix + item.optString("name");
+            if (!DriveImageCache.validThemePath(path) || !paths.add(path)) throw new IOException("Duplicate or invalid theme path");
+            String mime = item.optString("mimeType");
+            if ("application/vnd.google-apps.folder".equals(mime)) {
+                result.add(new JSONObject(item.toString()).put("themePath", path).put("directory", true));
+                walk(item.getString("id"), path + "/", result, paths, folders, depth + 1);
+            } else {
+                if (mime.startsWith("application/vnd.google-apps.")) throw new IOException("Unsupported Drive document or shortcut");
+                if (result.size() >= 10000) throw new IOException("Theme has too many files");
+                result.add(new JSONObject(item.toString()).put("themePath", path));
+            }
+        }
     }
 
     private void verifyFolder(String id) throws Exception {
@@ -161,7 +161,7 @@ final class DriveImageRepository {
     }
 
     long download(JSONObject item, File target, DriveConfig config, long budget) throws Exception {
-        DriveLog.event("stage=download kind=" + (DriveImageCache.caption(item) ? "captions" : "image")
+        DriveLog.event("stage=download kind=" + (DriveImageCache.caption(item) ? "captions" : DriveImageCache.themeConfig(item) ? "config" : DriveImageCache.image(item) ? "image" : "asset")
                 + " start declaredBytes=" + item.optLong("size", -1));
         long limit = Math.min(DriveImageCache.maxBytes(item, config), budget);
         long declared = item.optLong("size", -1);
@@ -170,7 +170,8 @@ final class DriveImageRepository {
         try {
             String type = connection.getContentType();
             String actualType = type == null ? "" : type.split(";")[0].trim();
-            if (DriveImageCache.caption(item) ? !DriveImageCache.captionMime(actualType) : !item.getString("mimeType").equals(actualType))
+            if (DriveImageCache.textAsset(item) ? !DriveImageCache.textMime(actualType)
+                    : !item.getString("mimeType").equals(actualType) && !"application/octet-stream".equals(actualType))
                 throw new IOException("Unexpected asset Content-Type");
             if (connection.getContentLengthLong() > limit) throw new IOException("Image exceeds limit");
             long size = 0;

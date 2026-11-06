@@ -11,6 +11,8 @@ import java.util.Set;
 final class DriveLog {
     static final String TAG = "TvHome.Drive";
     private static final Set<String> LOCAL = new HashSet<>(Arrays.asList(
+            "Theme config unavailable", "Theme text exceeds limit", "Invalid theme text", "Invalid Drive library",
+            "Invalid theme folder tree", "Duplicate or invalid theme path", "Unsupported Drive document or shortcut", "Theme has too many files",
             "Ambiguous wallpapers folder", "Duplicate theme image path", "Invalid theme image path",
             "Obsolete sync", "Cancelled", "Unsupported token endpoint", "Credentials unavailable",
             "Source is not an available folder", "Incomplete Drive listing", "Invalid file ID", "Repeated Drive page",

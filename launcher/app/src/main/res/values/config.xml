@@ -6,11 +6,7 @@
   Package names: on the TV run `pm list packages` (tools/tv.py 'pm list packages').
 -->
 <resources>
-    <!-- Private fork: limits cannot be overridden by a theme. -->
-    <integer name="drive_cache_max_size_mb">300</integer>
-    <integer name="drive_max_file_size_mb">20</integer>
-    <string name="drive_supported_mime_types" translatable="false">image/jpeg,image/png,image/webp</string>
-
+    <!-- Google Drive theme library settings and limits are in drive.xml. -->
 
     <!-- Tried in order when no standard settings handler is usable; each package must also be visible
          through <queries> in the manifest. -->
@@ -562,4 +558,8 @@
     <!-- Tiles drawn from the app's icon and name instead of its banner (for banners that crop badly). -->
     <string-array name="icon_tiles" translatable="false">
     </string-array>
+
+
+
+
 </resources>

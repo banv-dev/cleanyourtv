@@ -1,17 +1,16 @@
 package com.gathin.tvhome;
 
 import android.content.Context;
-import android.app.job.JobScheduler;
-import android.app.job.JobInfo;
-import org.robolectric.RuntimeEnvironment;
-import org.json.JSONObject;
 import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okio.Buffer;
@@ -19,375 +18,246 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 28)
-@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 public class DriveImagesTest {
     private Context context;
     private MockWebServer server;
     private DriveConfig config;
-    private byte[] png;
+    private byte[] png, json;
     @Before public void setUp() throws Exception {
         context = RuntimeEnvironment.getApplication();
         org.robolectric.shadows.ShadowEnvironment.setExternalStorageState(android.os.Environment.MEDIA_MOUNTED);
         server = new MockWebServer(); server.start();
-        config = parse("{\"folderId\":\"test-folder\"}");
+        config = DriveConfig.forFolder(context, "theme-a");
         png = java.util.Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAEklEQVR4nGP4z8DwHx9mGBkKAMLXf4EvceABAAAAAElFTkSuQmCC");
-        delete(new File(context.getFilesDir(), "drive-images"));
+        json = bytes("{\"columns\":4,\"wallpaper\":true,\"wallpaper_captions\":true,\"wallpaper_rotation_minutes\":1}");
+        remove(new File(context.getFilesDir(), "drive-images"));
     }
     @After public void tearDown() throws Exception { server.shutdown(); }
-    private void delete(File file) { File[] children = file.listFiles(); if (children != null) for (File child : children) delete(child); file.delete(); }
-    private DriveConfig parse(String drive) throws Exception { return DriveConfig.parse(context, new JSONObject("{\"googleDrive\":" + drive + "}")); }
-    private DriveImageRepository repository() { return new DriveImageRepository(refresh -> "test-token", () -> {}, server.url("/drive/v3").toString()); }
-    private void response(String body) { server.enqueue(new MockResponse().setBody(body).setHeader("Content-Type", "application/json")); }
-    private void folder() { response("{\"mimeType\":\"application/vnd.google-apps.folder\"}"); }
-    private JSONObject item(String id, String name, String revision) throws Exception {
-        return new JSONObject().put("id", id).put("name", name).put("mimeType", "image/png").put("size", png.length).put("modifiedTime", revision);
+    private void remove(File file) { File[] children = file.listFiles(); if (children != null) for (File child : children) remove(child); file.delete(); }
+    private byte[] bytes(String value) { return value.getBytes(StandardCharsets.UTF_8); }
+    private DriveImageRepository repo() { return new DriveImageRepository(refresh -> "test-token", () -> {}, server.url("/drive/v3").toString()); }
+    private void payload(byte[] data, String mime) { server.enqueue(new MockResponse().setBody(new Buffer().write(data)).setHeader("Content-Type", mime)); }
+    private void response(JSONObject value) { server.enqueue(new MockResponse().setBody(value.toString()).setHeader("Content-Type", "application/json")); }
+    private void folder() throws Exception { response(new JSONObject().put("mimeType", "application/vnd.google-apps.folder")); }
+    private JSONObject file(String id, String name, String mime, byte[] data, String revision) throws Exception {
+        return new JSONObject().put("id", id).put("name", name).put("mimeType", mime).put("size", data.length).put("modifiedTime", revision);
     }
-    private void listing(JSONObject... items) throws Exception {
-        JSONArray array = new JSONArray(); for (JSONObject item : items) array.put(item);
-        response(new JSONObject().put("files", array).toString());
+    private JSONObject image(String id, String name, String revision) throws Exception { return file(id, name, "image/png", png, revision); }
+    private JSONObject child(String id, String name) throws Exception { return new JSONObject().put("id", id).put("name", name).put("mimeType", "application/vnd.google-apps.folder"); }
+    private void listing(JSONObject... files) throws Exception { JSONArray values = new JSONArray(); for (JSONObject f : files) values.put(f); response(new JSONObject().put("files", values)); }
+    private void root(JSONObject... files) throws Exception {
+        folder(); JSONArray values = new JSONArray().put(file("cfg", "config.json", "application/json", json, "v1"));
+        for (JSONObject f : files) values.put(f);
+        response(new JSONObject().put("files", values));
     }
-    private JSONObject collectionFolder() throws Exception {
-        return new JSONObject().put("id", "collection").put("name", "wallpapers").put("mimeType", "application/vnd.google-apps.folder");
+    private void initial() throws Exception {
+        root(image("one", "wallpaper.jpg", "v1")); payload(json, "application/json"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
     }
-    private void image() { server.enqueue(new MockResponse().setBody(new Buffer().write(png)).setHeader("Content-Type", "image/png")); }
-    private void initialSync() throws Exception {
-        folder(); listing(item("one", "wallpaper.jpg", "v1")); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
+    private void activate(String id, String name) {
+        DriveThemes.remember(context, id, name);
+        context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit().putString("selected_theme", DriveThemes.selection(id)).apply();
     }
-    @Test public void strictConfigAndDefaults() throws Exception {
-        assertFalse(DriveConfig.parse(context, new JSONObject()).enabled);
-        assertTrue(config.enabled); assertTrue(config.syncOnLaunch); assertEquals(360, config.intervalMinutes); assertEquals(30, config.cacheRetentionDays);
-        assertFalse(parse("{\"enabled\":false}").enabled);
-        for (String invalid : new String[]{"null", "[]", "{\"folderId\":\"\"}", "{\"folderId\":\"https://drive.google.com/x\"}",
-                "{\"folderId\":\"a\",\"syncInterval\":-1}", "{\"folderId\":\"a\",\"syncInterval\":1.5}",
-                "{\"folderId\":\"a\",\"syncOnLaunch\":\"true\"}"}) {
-            DriveConfig bad = parse(invalid); assertFalse(invalid, bad.enabled); assertFalse(bad.error.isEmpty());
+    @Test public void settingsComeFromXmlAndOldLocalJsonDoesNotEnableDrive() throws Exception {
+        File local = context.getExternalFilesDir(null); assertNotNull(local); local.mkdirs();
+        Files.write(new File(local, "config.json").toPath(), bytes("{\"columns\":4,\"googleDrive\":{\"folderId\":\"old-source\",\"syncInterval\":999}}"));
+        assertFalse(DriveConfig.load(context).enabled);
+        assertEquals(4, com.gathin.tvhome.Config.load(context).columns);
+        activate("theme-a", "Nature");
+        DriveConfig current = DriveConfig.load(context);
+        assertTrue(current.enabled);
+        assertEquals(context.getResources().getInteger(R.integer.drive_sync_interval), current.intervalMinutes);
+        assertEquals(context.getResources().getInteger(R.integer.drive_cache_retention_days), current.cacheRetentionDays);
+        assertEquals(context.getResources().getBoolean(R.bool.drive_sync_on_launch), current.syncOnLaunch);
+        assertEquals("gDrive-Nature", DriveThemes.label(context, current.themeId));
+        assertFalse(DriveConfig.create(context, "theme-a", -1, true, 5).enabled);
+        assertFalse(DriveConfig.create(context, "theme-a", 5, true, 0).enabled);
+    }
+    @Test public void fullThemeAndNestedFilesArePublishedAndLoadedByNormalConfig() throws Exception {
+        byte[] readme = bytes("theme documentation"), caption = bytes("photo.png\tMountain\n");
+        root(file("readme", "README.md", "text/markdown", readme, "v1"), child("photos", "wallpapers"), child("assets", "assets"));
+        // Recursion follows the root API order, independently of download sorting.
+        folder(); listing(image("photo", "photo.png", "v1"), file("caption", "captions.txt", "text/plain", caption, "v1"));
+        folder(); listing(child("empty", "empty"), file("extra", "other.bin", "application/octet-stream", readme, "v1"));
+        folder(); listing();
+        // Natural path order: assets/other.bin, config.json, README.md, wallpapers/captions.txt, photo.png.
+        payload(readme, "application/octet-stream"); payload(json, "application/json"); payload(readme, "text/markdown"); payload(caption, "text/plain"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        activate("theme-a", "Thiên nhiên");
+        File dir = com.gathin.tvhome.Config.dir(context);
+        assertTrue(new File(dir, "assets/empty").isDirectory());
+        assertArrayEquals(readme, Files.readAllBytes(new File(dir, "assets/other.bin").toPath()));
+        assertEquals(4, com.gathin.tvhome.Config.load(context).columns);
+        assertEquals(1, com.gathin.tvhome.Config.load(context).wallpapers.size());
+        assertEquals("Mountain", DriveImageCache.captions(context, config).get("photo.png"));
+        assertEquals(1, DriveProgress.state(config).total);
+    }
+    @Test public void cachedSwitchBackNeedsMetadataOnlyAndOfflineConfigWorks() throws Exception {
+        initial(); DriveImageCache.markUsed(context, config);
+        File before = DriveImageCache.publishedDirectory(context, config);
+        DriveConfig b = DriveConfig.forFolder(context, "theme-b"); DriveImageCache.markUsed(context, b);
+        root(image("b", "wallpaper.jpg", "v1")); payload(json, "application/json"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, b, repo(), () -> {}));
+        assertTrue(before.isDirectory());
+        activate("theme-a", "A");
+        assertEquals(before, com.gathin.tvhome.Config.dir(context)); assertEquals(4, com.gathin.tvhome.Config.load(context).columns);
+        root(image("one", "wallpaper.jpg", "v1")); int count = server.getRequestCount();
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        assertEquals(2, server.getRequestCount() - count); assertEquals(before, DriveImageCache.publishedDirectory(context, config));
+    }
+    @Test public void configChangesReloadSettingsAndMissingConfigCannotReplaceOldTheme() throws Exception {
+        initial(); activate("theme-a", "A"); DriveThemes.published(context, config);
+        long before = context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0);
+        byte[] changed = bytes("{\"columns\":7}");
+        folder(); listing(file("cfg", "config.json", "application/json", changed, "v2")); payload(changed, "application/json");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        assertEquals(7, com.gathin.tvhome.Config.load(context).columns);
+        assertTrue(context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0) > before);
+        File active = DriveImageCache.publishedDirectory(context, config);
+        folder(); listing(image("one", "wallpaper.jpg", "v1"));
+        try { DriveImageCache.sync(context, config, repo(), () -> {}); fail(); } catch (java.io.IOException expected) { }
+        assertEquals(active, DriveImageCache.publishedDirectory(context, config));
+    }
+    @Test public void malformedConfigAndFailedNestedListingKeepPreviousSnapshot() throws Exception {
+        initial(); File before = DriveImageCache.publishedDirectory(context, config);
+        byte[] bad = bytes("[1,2]");
+        folder(); listing(file("cfg", "config.json", "application/json", bad, "v2")); payload(bad, "application/json");
+        try { DriveImageCache.sync(context, config, repo(), () -> {}); fail(); } catch (Exception expected) { }
+        assertEquals(before, DriveImageCache.publishedDirectory(context, config));
+        root(child("child", "assets")); folder(); server.enqueue(new MockResponse().setResponseCode(403));
+        try { DriveImageCache.sync(context, config, repo(), () -> {}); fail(); } catch (DriveImageRepository.ApiException expected) { }
+        assertEquals(before, DriveImageCache.publishedDirectory(context, config));
+    }
+    @Test public void pendingDriveSelectionDoesNotUsePreviousLocalThemeOrOverlayCopy() throws Exception {
+        File root = context.getExternalFilesDir(null); assertNotNull(root); root.mkdirs();
+        Files.write(new File(root, "config.json").toPath(), bytes("{\"columns\":7}"));
+        assertEquals(7, com.gathin.tvhome.Config.load(context).columns);
+        activate("not-cached", "Pending");
+        assertEquals(context.getResources().getInteger(R.integer.columns), com.gathin.tvhome.Config.load(context).columns);
+        assertFalse(new File(com.gathin.tvhome.Config.dir(context), "config.json").exists());
+    }
+    @Test public void traversalDuplicatePathsAndShortcutsAreRejectedBeforeDownloads() throws Exception {
+        for (JSONObject bad : new JSONObject[]{file("bad", "../escape", "text/plain", json, "v1"),
+                file("cfg2", "config.json", "application/json", json, "v1"),
+                file("shortcut", "linked", "application/vnd.google-apps.shortcut", json, "v1")}) {
+            root(bad);
+            try { repo().list(config); fail(); } catch (java.io.IOException expected) { }
         }
-        DriveConfig zero = parse("{\"folderId\":\"a\",\"syncInterval\":0,\"syncOnLaunch\":false,\"cacheMaxSizeMb\":1}");
-        assertTrue(zero.enabled); assertEquals(0, zero.intervalMinutes); assertFalse(zero.syncOnLaunch); assertEquals(300 * 1048576L, zero.cacheBytes);
+        assertFalse(DriveImageCache.validThemePath("/absolute")); assertFalse(DriveImageCache.validThemePath("x/../escape"));
+        assertTrue(DriveImageCache.validThemePath("assets/nested/ảnh 1.png"));
     }
-    @Test public void completePaginationAndNaturalOrder() throws Exception {
-        folder(); listing(collectionFolder()); folder();
-        response(new JSONObject().put("files", new JSONArray().put(item("ten", "photo-10.png", "v1"))).put("nextPageToken", "page2").toString());
-        listing(item("two", "photo-2.png", "v1"));
-        List<JSONObject> result = repository().list(config);
-        assertEquals(2, result.size()); assertEquals("two", result.get(0).getString("id"));
-        for (int i = 0; i < 4; i++) server.takeRequest();
-        assertTrue(server.takeRequest().getPath().contains("pageToken=page2"));
+    @Test public void paginationAndCatalogPersistOfflineFolderNames() throws Exception {
+        folder(); response(new JSONObject().put("files", new JSONArray().put(child("ten", "Theme 10"))).put("nextPageToken", "p2"));
+        listing(child("two", "Theme 2"), file("not-folder", "readme.txt", "text/plain", json, "v1"));
+        List<JSONObject> folders = repo().folders("library");
+        assertEquals(2, folders.size()); assertEquals("two", folders.get(0).getString("id"));
+        DriveThemes.saveCatalog(context, folders);
+        assertEquals(2, DriveThemes.catalog(context).size());
+        assertEquals("gDrive-Theme 2", DriveThemes.label(context, DriveThemes.selection("two")));
     }
-    @Test public void unauthorizedRefreshesOnlyOnce() throws Exception {
-        server.enqueue(new MockResponse().setResponseCode(401)); server.enqueue(new MockResponse().setResponseCode(401));
-        AtomicInteger refreshed = new AtomicInteger();
-        DriveImageRepository repo = new DriveImageRepository(refresh -> { if (refresh) refreshed.incrementAndGet(); return "test"; }, () -> {}, server.url("/drive/v3").toString());
-        try { repo.list(config); fail(); } catch (DriveImageRepository.ApiException expected) { assertEquals(401, expected.status); }
-        assertEquals(1, refreshed.get()); assertEquals(2, server.getRequestCount());
-    }
-    @Test public void cacheSurvivesFailedPageAndRevokedFolder() throws Exception {
-        initialSync(); List<File> previous = DriveImageCache.images(context, config);
-        folder(); response("{\"files\":[],\"nextPageToken\":\"p2\"}"); server.enqueue(new MockResponse().setResponseCode(403));
-        try { DriveImageCache.sync(context, config, repository(), () -> {}); fail(); } catch (DriveImageRepository.ApiException expected) { }
-        assertEquals(previous, DriveImageCache.images(context, config)); assertTrue(previous.get(0).isFile());
-        server.enqueue(new MockResponse().setResponseCode(404));
-        try { DriveImageCache.sync(context, config, repository(), () -> {}); fail(); } catch (DriveImageRepository.ApiException expected) { }
-        assertEquals(previous, DriveImageCache.images(context, config));
-    }
-    @Test public void incrementalReplacementAndVerifiedEmptyFolder() throws Exception {
-        initialSync(); File before = DriveImageCache.images(context, config).get(0);
-        folder(); listing(item("one", "wallpaper.jpg", "v1"));
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(before, DriveImageCache.images(context, config).get(0));
-        folder(); listing(item("one", "wallpaper.jpg", "v2")); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertNotEquals(before, DriveImageCache.images(context, config).get(0)); assertFalse(before.exists());
-        assertTrue(DriveImageCache.images(context, parse("{\"folderId\":\"other\"}")).isEmpty());
-        folder(); listing(); assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertTrue(DriveImageCache.images(context, config).isEmpty());
-    }
-    @Test public void badImagePreservesOldVersionAndOtherDownloads() throws Exception {
-        initialSync(); File before = DriveImageCache.images(context, config).get(0);
-        folder(); listing(item("one", "wallpaper.jpg", "v2"), collectionFolder());
-        folder(); listing(item("two", "photo-2.png", "v1"));
-        server.enqueue(new MockResponse().setBody("bad image").setHeader("Content-Type", "image/png")); image();
-        assertFalse(DriveImageCache.sync(context, config, repository(), () -> {}));
-        List<File> images = DriveImageCache.images(context, config); assertEquals(2, images.size()); assertEquals("wallpaper.jpg", images.get(0).getName());
-        assertArrayEquals(png, Files.readAllBytes(images.get(0).toPath()));
-        assertEquals(2, DriveProgress.state(config).total);
-        assertEquals(1, DriveProgress.state(config).done); // failed update retains old bytes but is not synced
-
-    }
-    @Test public void cancelledSyncNeverPublishes() throws Exception {
-        initialSync(); List<File> previous = DriveImageCache.images(context, config);
-        folder(); listing(item("one", "wallpaper.jpg", "v2")); image();
-        AtomicInteger checks = new AtomicInteger();
-        try { DriveImageCache.sync(context, config, repository(), () -> { if (checks.incrementAndGet() > 3) throw new java.io.IOException("changed theme"); }); fail(); }
-        catch (java.io.IOException expected) { }
-        assertEquals(previous, DriveImageCache.images(context, config)); assertTrue(previous.get(0).isFile());
-    }
-    @Test public void nonImagesAreFilteredAndIncompleteSearchIsRejected() throws Exception {
-        folder();
-        response("{\"files\":[{\"id\":\"pdf\",\"mimeType\":\"application/pdf\"},{\"id\":\"child\",\"mimeType\":\"application/vnd.google-apps.folder\"}]}");
-        assertTrue(repository().list(config).isEmpty());
-        folder(); response("{\"files\":[],\"incompleteSearch\":true}");
-        try { repository().list(config); fail(); } catch (java.io.IOException expected) { }
-    }
-    @Test public void oversizedMetadataDoesNotDownloadOrDiscardOldImage() throws Exception {
-        initialSync(); List<File> previous = DriveImageCache.images(context, config);
-        folder(); listing(item("one", "wallpaper.jpg", "v2").put("size", config.maxFileBytes + 1));
-        int requestsBefore = server.getRequestCount();
-        assertFalse(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(2, server.getRequestCount() - requestsBefore);
-        assertEquals(previous.get(0).getName(), DriveImageCache.images(context, config).get(0).getName());
-        assertArrayEquals(png, Files.readAllBytes(DriveImageCache.images(context, config).get(0).toPath()));
-    }
-    @Test public void wrongContentTypeKeepsPublishedVersion() throws Exception {
-        initialSync(); List<File> previous = DriveImageCache.images(context, config);
-        folder(); listing(item("one", "wallpaper.jpg", "v2"));
-        server.enqueue(new MockResponse().setBody("not an image").setHeader("Content-Type", "text/html"));
-        assertFalse(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(previous.get(0).getName(), DriveImageCache.images(context, config).get(0).getName());
-        assertArrayEquals(png, Files.readAllBytes(DriveImageCache.images(context, config).get(0).toPath()));
-    }
-    @Test public void themeStructureAndWallpaperSelectionMatchLocalThemes() throws Exception {
-        folder(); listing(item("single", "wallpaper.jpg", "v1"), collectionFolder(), item("ignored", "other.png", "v1"));
-        folder(); listing(item("ten", "photo-10.png", "v1"), item("two", "photo-2.png", "v1"));
-        image(); image(); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        File single = DriveImageCache.wallpaper(context, config);
-        assertNotNull(single); assertEquals("wallpaper.jpg", single.getName());
-        List<File> collection = DriveImageCache.collection(context, config);
-        assertEquals(2, collection.size()); assertEquals("photo-2.png", collection.get(0).getName());
-        assertEquals(new File(single.getParentFile(), "wallpapers"), collection.get(0).getParentFile());
-        assertEquals(java.util.Collections.singletonList(single), DriveImageCache.playable(context, config, 0, null));
-        assertEquals(collection, DriveImageCache.playable(context, config, 1, null));
-        assertEquals(java.util.Collections.singletonList(collection.get(0)), DriveImageCache.playable(context, config, 1, "photo-2.png"));
-        assertTrue(DriveImageCache.playable(context, config, 1, "none").isEmpty());
-    }
-    @Test public void collectionOnlyAndFailedChildListingPreserveSnapshot() throws Exception {
-        folder(); listing(collectionFolder()); folder(); listing(item("two", "photo-2.png", "v1")); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        List<File> previous = DriveImageCache.images(context, config);
-        assertNull(DriveImageCache.wallpaper(context, config));
-        assertEquals(previous, DriveImageCache.playable(context, config, 1, null));
-        assertTrue(DriveImageCache.playable(context, config, 0, null).isEmpty());
-        folder(); listing(collectionFolder()); folder();
-        server.enqueue(new MockResponse().setResponseCode(403));
-        try { DriveImageCache.sync(context, config, repository(), () -> {}); fail(); }
-        catch (DriveImageRepository.ApiException expected) { }
-        assertEquals(previous, DriveImageCache.images(context, config)); assertTrue(previous.get(0).isFile());
-    }
-    @Test public void unsafeNamesAndNestedFoldersAreNotDownloaded() throws Exception {
-        folder(); listing(collectionFolder()); folder();
-        listing(item("escape", "../escape.png", "v1"), item("hidden", ".hidden.png", "v1"),
-                item("two", "photo-2.png", "v1"), new JSONObject().put("id", "nested").put("name", "nested").put("mimeType", "application/vnd.google-apps.folder"));
-        List<JSONObject> files = repository().list(config);
-        assertEquals(1, files.size()); assertEquals("wallpapers/photo-2.png", files.get(0).getString("themePath"));
-        assertFalse(DriveImageCache.validThemePath("wallpapers/../../escape.png"));
-        assertFalse(DriveImageCache.validThemePath("wallpapers/nested/photo.png"));
-    }
-    @Test public void duplicateFoldersAndImageNamesAreRejectedBeforePublish() throws Exception {
-        initialSync(); List<File> previous = DriveImageCache.images(context, config);
-        folder(); listing(collectionFolder(), new JSONObject(collectionFolder().toString()).put("id", "duplicate"));
-        try { DriveImageCache.sync(context, config, repository(), () -> {}); fail(); }
-        catch (java.io.IOException expected) { }
-        assertEquals(previous, DriveImageCache.images(context, config));
-        folder(); listing(collectionFolder()); folder(); listing(item("a", "same.png", "v1"), item("b", "same.png", "v1"));
-        try { DriveImageCache.sync(context, config, repository(), () -> {}); fail(); }
-        catch (java.io.IOException expected) { }
-        assertEquals(previous, DriveImageCache.images(context, config));
-    }
-    @Test public void renameReusesBytesAndChildFailureDoesNotPublishRootDeletion() throws Exception {
-        folder(); listing(collectionFolder()); folder(); listing(item("one", "before.png", "v1")); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        folder(); listing(collectionFolder()); folder(); listing(item("one", "after.png", "v1"));
-        int requests = server.getRequestCount();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(4, server.getRequestCount() - requests);
-        assertEquals("after.png", DriveImageCache.collection(context, config).get(0).getName());
-    }
-    private JSONObject captionItem(String revision, byte[] bytes) throws Exception {
-        return new JSONObject().put("id", "captions").put("name", "captions.txt").put("mimeType", "text/plain")
-                .put("size", bytes.length).put("modifiedTime", revision);
-    }
-    private void text(byte[] bytes) {
-        server.enqueue(new MockResponse().setBody(new Buffer().write(bytes)).setHeader("Content-Type", "text/plain; charset=UTF-8"));
-    }
-    @Test public void captionsAreAddedUpdatedAndDeletedWithTheSnapshot() throws Exception {
-        byte[] v1 = "photo-2.png\tFirst caption\n".getBytes(StandardCharsets.UTF_8);
-        folder(); listing(collectionFolder()); folder(); listing(captionItem("v1", v1), item("two", "photo-2.png", "v1"));
-        text(v1); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(1, DriveImageCache.images(context, config).size());
-        assertEquals("First caption", DriveImageCache.captions(context, config).get("photo-2.png"));
-        assertEquals(1, DriveProgress.state(config).total); // captions are not images
+    @Test public void imageChangeAndBadCaptionKeepPreviousValidBytes() throws Exception {
+        byte[] cap = bytes("photo.png\tFirst\n");
+        root(child("photos", "wallpapers")); folder(); listing(image("photo", "photo.png", "v1"), file("cap", "captions.txt", "text/plain", cap, "v1"));
+        payload(json, "application/json"); payload(cap, "text/plain"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        byte[] invalid = new byte[]{(byte)0xc3, 0x28};
+        root(child("photos", "wallpapers")); folder(); listing(image("photo", "photo.png", "v2"), file("cap", "captions.txt", "text/plain", invalid, "v2"));
+        payload(invalid, "text/plain"); payload(png, "image/png");
+        assertFalse(DriveImageCache.sync(context, config, repo(), () -> {}));
+        assertEquals("First", DriveImageCache.captions(context, config).get("photo.png"));
         assertEquals(1, DriveProgress.state(config).done);
-        assertEquals(DriveImageCache.collection(context, config).get(0).getParentFile(), DriveImageCache.captionsFile(context, config).getParentFile());
-        byte[] v2 = "photo-2.png\tUpdated caption\n".getBytes(StandardCharsets.UTF_8);
-        folder(); listing(collectionFolder()); folder(); listing(captionItem("v2", v2), item("two", "photo-2.png", "v1")); text(v2);
-        int requests = server.getRequestCount();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(5, server.getRequestCount() - requests); // metadata + captions only; image bytes reused
-        assertEquals("Updated caption", DriveImageCache.captions(context, config).get("photo-2.png"));
-        folder(); listing(collectionFolder()); folder(); listing(item("two", "photo-2.png", "v1"));
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertNull(DriveImageCache.captionsFile(context, config));
-        assertTrue(DriveImageCache.captions(context, config).isEmpty());
-        assertEquals(1, DriveImageCache.images(context, config).size());
     }
-    @Test public void malformedCaptionsKeepPreviousTextAndImage() throws Exception {
-        byte[] good = "photo-2.png\tKeep this caption\n".getBytes(StandardCharsets.UTF_8);
-        folder(); listing(collectionFolder()); folder(); listing(captionItem("v1", good), item("two", "photo-2.png", "v1")); text(good); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        byte[] bad = new byte[]{(byte) 0xc3, 0x28};
-        folder(); listing(collectionFolder()); folder(); listing(captionItem("v2", bad), item("two", "photo-2.png", "v1")); text(bad);
-        assertFalse(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals("Keep this caption", DriveImageCache.captions(context, config).get("photo-2.png"));
-        assertEquals(1, DriveImageCache.images(context, config).size());
+    @Test public void expiryUsesGlobalXmlPolicyAndBackgroundSyncDoesNotRefreshLastUse() throws Exception {
+        initial(); long now = System.currentTimeMillis(), day = 86400000L;
+        DriveImageCache.markUsed(context, config, now - (config.cacheRetentionDays - 1L) * day);
+        DriveConfig b = DriveConfig.forFolder(context, "b");
+        DriveImageCache.evictExpired(context, b, () -> {}, now);
+        assertNotNull(DriveImageCache.publishedDirectory(context, config));
+        root(image("one", "wallpaper.jpg", "v1")); assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        DriveImageCache.evictExpired(context, b, () -> {}, now + day);
+        assertFalse(DriveImageCache.directory(context, config).exists());
     }
-    @Test public void oversizedCaptionsAreNotDownloadedAndDuplicateCaptionPathsAreRejected() throws Exception {
-        folder(); listing(collectionFolder()); folder(); listing(captionItem("v1", new byte[0]).put("size", DriveImageCache.MAX_CAPTION_BYTES + 1));
-        assertFalse(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(4, server.getRequestCount());
-        assertNull(DriveImageCache.captionsFile(context, config));
-        folder(); listing(collectionFolder()); folder(); listing(captionItem("v1", new byte[0]), captionItem("v2", new byte[0]).put("id", "duplicate"));
-        try { DriveImageCache.sync(context, config, repository(), () -> {}); fail(); }
+    @Test public void cancellationDoesNotPublishHalfATheme() throws Exception {
+        initial(); File before = DriveImageCache.publishedDirectory(context, config);
+        root(image("one", "wallpaper.jpg", "v2")); payload(png, "image/png");
+        java.util.concurrent.atomic.AtomicInteger checks = new java.util.concurrent.atomic.AtomicInteger();
+        try { DriveImageCache.sync(context, config, repo(), () -> { if (checks.incrementAndGet() > 3) throw new java.io.IOException("Cancelled"); }); fail(); }
         catch (java.io.IOException expected) { }
+        assertEquals(before, DriveImageCache.publishedDirectory(context, config));
     }
-    @Test public void runningWallpaperPlayerLoadsNewCaptionsWithoutRecreation() throws Exception {
-        folder(); listing(collectionFolder()); folder(); listing(item("two", "photo-2.png", "v1")); image();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();
-        Files.write(new File(dir, com.gathin.tvhome.Config.FILE_NAME).toPath(),
-                "{\"googleDrive\":{\"folderId\":\"test-folder\"},\"wallpaper\":true,\"wallpaper_captions\":true,\"wallpaper_rotation_minutes\":1}".getBytes(StandardCharsets.UTF_8));
-        android.widget.FrameLayout root = new android.widget.FrameLayout(context);
-        WallpaperPlayer player = new WallpaperPlayer(context, root, com.gathin.tvhome.Config.load(context));
+    @Test public void imageOnlyChangeKeepsStyleRevisionAndExpiredRedownloadAppliesAgain() throws Exception {
+        initial(); activate("theme-a", "A");
+        android.content.SharedPreferences prefs = context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE);
+        long before = prefs.getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0);
+        root(image("one", "wallpaper.jpg", "v2")); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        assertEquals(before, prefs.getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0));
+        DriveImageCache.markUsed(context, config, System.currentTimeMillis() - (config.cacheRetentionDays + 1L) * 86400000L);
+        activate("theme-b", "B"); DriveImageCache.evictExpired(context, DriveConfig.load(context), () -> {}, System.currentTimeMillis());
+        activate("theme-a", "A"); assertNull(DriveImageCache.publishedDirectory(context, config));
+        root(image("one", "wallpaper.jpg", "v2")); payload(json, "application/json"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+        assertTrue(prefs.getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0) > before);
+        assertEquals(4, com.gathin.tvhome.Config.load(context).columns);
+    }
+    @Test public void fullThemeCaptionUpdateReachesRunningPlayerWithoutStyleReload() throws Exception {
+        byte[] first = bytes("photo.png\tFirst\n"), second = bytes("photo.png\tSecond\n");
+        root(child("photos", "wallpapers")); folder(); listing(image("photo", "photo.png", "v1"), file("cap", "captions.txt", "text/plain", first, "v1"));
+        payload(json, "application/json"); payload(first, "text/plain"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {})); activate("theme-a", "A");
+        android.widget.FrameLayout rootView = new android.widget.FrameLayout(context);
+        WallpaperPlayer player = new WallpaperPlayer(context, rootView, com.gathin.tvhome.Config.load(context));
         try {
-            player.start();
-            android.widget.TextView label = null;
-            for (int i = 0; i < root.getChildCount(); i++) if (root.getChildAt(i) instanceof android.widget.TextView)
-                label = (android.widget.TextView) root.getChildAt(i);
-            assertNotNull("Drive caption view must exist before the first captions file arrives", label);
-            byte[] bytes = "photo-2.png\tCaption added during sync\n".getBytes(StandardCharsets.UTF_8);
-            folder(); listing(collectionFolder()); folder(); listing(captionItem("v1", bytes), item("two", "photo-2.png", "v1")); text(bytes);
-            assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-            DriveSync.notifyImages();
-            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            assertEquals("Caption added during sync", label.getText().toString());
-            assertEquals(1f, label.getAlpha(), 0.001f);
-            folder(); listing(collectionFolder()); folder(); listing(item("two", "photo-2.png", "v1"));
-            assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-            DriveSync.notifyImages();
-            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            assertEquals("", label.getText().toString());
-            assertEquals(0f, label.getAlpha(), 0.001f);
+            player.start(); android.widget.TextView label = null;
+            for (int i = 0; i < rootView.getChildCount(); i++) if (rootView.getChildAt(i) instanceof android.widget.TextView) label = (android.widget.TextView) rootView.getChildAt(i);
+            assertNotNull(label); assertEquals("First", label.getText().toString());
+            long revision = context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0);
+            root(child("photos", "wallpapers")); folder(); listing(image("photo", "photo.png", "v1"), file("cap", "captions.txt", "text/plain", second, "v2")); payload(second, "text/plain");
+            assertTrue(DriveImageCache.sync(context, config, repo(), () -> {}));
+            assertEquals(revision, context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).getLong(com.gathin.tvhome.Config.SETTINGS_REVISION_KEY, 0));
+            DriveSync.notifyImages(); org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertEquals("Second", label.getText().toString());
         } finally { player.close(); }
     }
-    @Test public void themeSwitchRetainsCacheAndReturningUnchangedSourceDoesNotDownload() throws Exception {
-        initialSync();
-        DriveImageCache.markUsed(context, config);
-        File a = DriveImageCache.images(context, config).get(0);
-        DriveConfig b = parse("{\"folderId\":\"folder-b\",\"cacheRetentionDays\":30}");
-        DriveImageCache.markUsed(context, b);
-        folder(); listing(item("b", "wallpaper.jpg", "v1")); image();
-        assertTrue(DriveImageCache.sync(context, b, repository(), () -> {}));
-        assertTrue(a.isFile());
-        assertEquals(a, DriveImageCache.images(context, config).get(0)); // available immediately, without network
-        folder(); listing(item("one", "wallpaper.jpg", "v1"));
-        int requests = server.getRequestCount();
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        assertEquals(2, server.getRequestCount() - requests); // only metadata
-        assertEquals(a, DriveImageCache.images(context, config).get(0));
-        assertEquals(1, DriveImageCache.images(context, b).size());
-    }
-    @Test public void retentionExpiresAfterConfiguredDaysAndUseResetsTheTimer() throws Exception {
-        initialSync();
-        long now = System.currentTimeMillis(), day = 86400000L;
-        DriveConfig a = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":7}");
-        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
-        DriveImageCache.markUsed(context, a, now);
-        File file = DriveImageCache.images(context, a).get(0);
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 6 * day);
-        assertTrue(file.isFile());
-        DriveImageCache.markUsed(context, a, now + 6 * day);
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 7 * day);
-        assertTrue(file.isFile());
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 13 * day);
-        assertFalse(DriveImageCache.directory(context, a).exists());
-    }
-    @Test public void sharedFolderRemainsUntilEveryThemesRetentionHasElapsed() throws Exception {
-        initialSync();
-        long now = System.currentTimeMillis(), day = 86400000L;
-        context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit().putString("selected_theme", "short").apply();
-        DriveConfig shortLease = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":7}");
-        context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit().putString("selected_theme", "long").apply();
-        DriveConfig longLease = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":60}");
-        DriveImageCache.markUsed(context, shortLease, now);
-        DriveImageCache.markUsed(context, longLease, now);
-        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 30 * day);
-        assertEquals(1, DriveImageCache.images(context, config).size());
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 60 * day);
-        assertFalse(DriveImageCache.directory(context, config).exists());
-    }
-    @Test public void backgroundSyncDoesNotRefreshUsageAndClockRollbackDoesNotExpireCache() throws Exception {
-        initialSync();
-        long now = System.currentTimeMillis(), day = 86400000L;
-        DriveImageCache.markUsed(context, config, now - 31 * day);
-        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
-        DriveImageCache.evictExpired(context, b, () -> {}, now - 32 * day);
-        assertEquals(1, DriveImageCache.images(context, config).size());
-        folder(); listing(item("one", "wallpaper.jpg", "v1"));
-        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
-        DriveImageCache.evictExpired(context, b, () -> {}, now);
-        assertFalse(DriveImageCache.directory(context, config).exists());
-    }
-    @Test public void legacyCacheWithoutUsageHistoryGetsThirtyDayGrace() throws Exception {
-        initialSync();
-        long now = System.currentTimeMillis(), day = 86400000L;
-        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
-        DriveImageCache.evictExpired(context, b, () -> {}, now);
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 29 * day);
-        assertEquals(1, DriveImageCache.images(context, config).size());
-        DriveImageCache.evictExpired(context, b, () -> {}, now + 30 * day);
-        assertFalse(DriveImageCache.directory(context, config).exists());
-    }
-    @Test public void retentionConfigurationIsStrict() throws Exception {
-        for (String value : new String[]{"0", "-1", "true", "1.5", "\"30\"", "2147483648"}) {
-            DriveConfig invalid = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":" + value + "}");
-            assertFalse(invalid.enabled); assertEquals("googleDrive.cacheRetentionDays", invalid.error);
-        }
-        assertEquals(60, parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":60}").cacheRetentionDays);
-    }
-    @Test public void selectingThemeWithCachedImagesDoesNotShowSyncProgressToast() throws Exception {
-        initialSync();
-        File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();
-        Files.write(new File(dir, com.gathin.tvhome.Config.FILE_NAME).toPath(),
-                "{\"googleDrive\":{\"folderId\":\"test-folder\"}}".getBytes(StandardCharsets.UTF_8));
-        DriveProgress.themeSelected(context, config);
-        org.robolectric.shadows.ShadowToast.reset();
-        DriveProgress progress = new DriveProgress(context, config);
+    @Test public void collectionOnlyThemeWithZeroRotationShowsFirstImageStatically() throws Exception {
+        json = bytes("{\"wallpaper\":true,\"wallpaper_rotation_minutes\":0}");
+        root(child("photos", "wallpapers")); folder(); listing(image("ten", "photo-10.png", "v1"), image("two", "photo-2.png", "v1"));
+        payload(json, "application/json"); payload(png, "image/png"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {})); activate("theme-a", "A");
+        com.gathin.tvhome.Config loaded = com.gathin.tvhome.Config.load(context);
+        assertTrue(loaded.wallpaperEnabled); assertEquals(0, loaded.wallpaperRotationMinutes);
+        assertEquals(1, loaded.wallpapers.size()); assertEquals("photo-2.png", loaded.wallpapers.get(0).getName());
+        android.widget.FrameLayout rootView = new android.widget.FrameLayout(context);
+        WallpaperPlayer player = new WallpaperPlayer(context, rootView, loaded);
         try {
-            progress.start();
-            DriveProgress.update(config, DriveProgress.Phase.PREPARING, 0, -1);
+            boolean rendered = false;
+            for (int i = 0; i < rootView.getChildCount(); i++) if (rootView.getChildAt(i) instanceof android.widget.ImageView)
+                rendered |= ((android.widget.ImageView) rootView.getChildAt(i)).getDrawable() != null;
+            assertTrue("Static collection fallback should decode and populate the wallpaper view", rendered);
+        } finally { player.close(); }
+        assertTrue(DriveImageCache.playable(context, config, 0, "none").isEmpty());
+    }
+    @Test public void staticFallbackStillPrefersSingleWallpaperAndRespectsWallpaperDisabled() throws Exception {
+        json = bytes("{\"wallpaper\":false,\"wallpaper_rotation_minutes\":0}");
+        root(image("single", "wallpaper.jpg", "v1"), child("photos", "wallpapers")); folder(); listing(image("photo", "photo.png", "v1"));
+        payload(json, "application/json"); payload(png, "image/png"); payload(png, "image/png");
+        assertTrue(DriveImageCache.sync(context, config, repo(), () -> {})); activate("theme-a", "A");
+        assertEquals("wallpaper.jpg", DriveImageCache.playable(context, config, 0, null).get(0).getName());
+        com.gathin.tvhome.Config loaded = com.gathin.tvhome.Config.load(context);
+        assertFalse(loaded.wallpaperEnabled); assertTrue(loaded.wallpapers.isEmpty());
+    }
+    @Test public void noCacheProgressRequestIsNotArmedForACachedDriveTheme() throws Exception {
+        initial(); activate("theme-a", "A"); DriveProgress.themeSelected(context, DriveConfig.load(context));
+        org.robolectric.shadows.ShadowToast.reset(); DriveProgress progress = new DriveProgress(context, DriveConfig.load(context));
+        try {
+            progress.start(); DriveProgress.update(DriveConfig.load(context), DriveProgress.Phase.PREPARING, 0, -1);
             org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
             assertEquals(0, org.robolectric.shadows.ShadowToast.shownToastCount());
         } finally { progress.stop(); }
-    }
-    @Test public void schedulerHonorsZeroAndCancelsChangedSource() throws Exception {
-        File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();
-        File file = new File(dir, com.gathin.tvhome.Config.FILE_NAME);
-        Files.write(file.toPath(), "{\"googleDrive\":{\"folderId\":\"test-folder\",\"syncInterval\":360}}".getBytes(StandardCharsets.UTF_8));
-        DriveSync.schedule(context, true);
-        JobScheduler scheduler = context.getSystemService(JobScheduler.class);
-        JobInfo periodic = scheduler.getPendingJob(DriveSync.PERIODIC);
-        assertNotNull(periodic); assertEquals(360 * 60000L, periodic.getIntervalMillis());
-        assertNotNull(scheduler.getPendingJob(DriveSync.NOW));
-        Files.write(file.toPath(), "{\"googleDrive\":{\"folderId\":\"other\",\"syncInterval\":0,\"syncOnLaunch\":false}}".getBytes(StandardCharsets.UTF_8));
-        DriveSync.schedule(context, true);
-        assertNull(scheduler.getPendingJob(DriveSync.PERIODIC)); assertNull(scheduler.getPendingJob(DriveSync.NOW));
     }
 }

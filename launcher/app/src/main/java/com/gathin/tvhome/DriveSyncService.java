@@ -27,7 +27,7 @@ public final class DriveSyncService extends JobService {
             };
             long started = android.os.SystemClock.elapsedRealtime();
             String stage = "source.check";
-            DriveLog.event("job=" + parameters.getJobId() + " theme=" + config.themeId
+            DriveLog.event("job=" + parameters.getJobId() + " source=" + (config.folderId.isEmpty() ? "local" : "GoogleDrive")
                     + " start deviceUtc=" + java.time.Instant.now() + " intervalMinutes=" + config.intervalMinutes
                     + " cachedImages=" + DriveImageCache.images(this, config).size());
             try {
