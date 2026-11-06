@@ -45,9 +45,14 @@ final class DriveSync {
         JobScheduler scheduler = context.getSystemService(JobScheduler.class);
         if (scheduler == null) return false;
         JobInfo pending = scheduler.getPendingJob(NOW);
-        if (pending != null && config.identity().equals(pending.getExtras().getString("source"))) return true;
+        if (pending != null && config.identity().equals(pending.getExtras().getString("source"))) {
+            DriveProgress.queued(config);
+            return true;
+        }
         boolean accepted = scheduler.schedule(builder(context, config, NOW).setMinimumLatency(0).build()) == JobScheduler.RESULT_SUCCESS;
         DriveLog.event("stage=schedule immediate accepted=" + accepted + "; awaiting Android network constraint");
+        if (accepted) DriveProgress.queued(config);
+        else DriveProgress.finish(config, DriveProgress.Phase.ERROR);
         return accepted;
     }
     private static JobInfo.Builder builder(Context context, DriveConfig config, int id) {

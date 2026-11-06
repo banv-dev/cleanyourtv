@@ -33,6 +33,7 @@ import java.util.concurrent.Executors;
 final class WallpaperPlayer {
     private final Context context;
     private final DriveConfig drive;
+    private final DriveProgress driveProgress;
     private final boolean driveVisible;
     private final Runnable driveChanged = this::refreshDrive;
     private final FrameLayout root;
@@ -71,6 +72,7 @@ final class WallpaperPlayer {
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
         this.context = context.getApplicationContext();
         drive = DriveConfig.load(context);
+        driveProgress = new DriveProgress(context, drive);
         driveVisible = drive.displaysCache() && config.wallpaperEnabled && !"none".equals(context
                 .getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE).getString(Config.WALLPAPER_CHOICE_KEY, null));
         this.root = root;
@@ -143,6 +145,7 @@ final class WallpaperPlayer {
 
     void start() {
         active = true;
+        driveProgress.start();
         DriveSync.listen(driveChanged);
         refreshDrive();
         DriveSync.schedule(context, true);
@@ -150,6 +153,7 @@ final class WallpaperPlayer {
     }
 
     void stop() {
+        driveProgress.stop();
         if (active) DriveImageCache.markUsed(context, drive);
         DriveSync.unlisten(driveChanged);
         active = false;
@@ -198,6 +202,7 @@ final class WallpaperPlayer {
     }
 
     void close() {
+        driveProgress.stop();
         active = false;
         closed = true;
         DriveSync.unlisten(driveChanged);

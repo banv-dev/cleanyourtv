@@ -234,6 +234,10 @@ final class DriveImageCache {
                         DriveImageRepository.Check check) throws Exception {
         List<JSONObject> remote = repository.list(config); // Complete BOTH root and collection pagination first.
         check.check();
+        int totalImages = 0;
+        for (JSONObject item : remote) if (!caption(item)) totalImages++;
+        int readyImages = 0;
+        DriveProgress.update(config, DriveProgress.Phase.IMAGES, 0, totalImages);
         File dir = directory(context, config);
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cache unavailable");
         JSONObject previousManifest = manifest(context, config);
@@ -257,6 +261,7 @@ final class DriveImageCache {
             check.check();
             previousManifest.put("partial", false).put("lastSuccessfulSyncUtc", Instant.now().toString());
             publish(dir, previousManifest, check);
+            DriveProgress.update(config, DriveProgress.Phase.IMAGES, totalImages, totalImages);
             DriveLog.event("stage=cache unchanged theme snapshot; reused=" + remote.size());
             return true;
         }
@@ -278,6 +283,7 @@ final class DriveImageCache {
                 File temporary = new File(stage, UUID.randomUUID() + ".tmp");
                 JSONObject previous = old.get(item.getString("id"));
                 JSONObject saved;
+                boolean synced = true;
                 boolean reuse = previous != null && caption(item) == caption(previous) && same(item, previous)
                         && imageFile(dir, previous).length() <= maxBytes(item, config);
                 try {
@@ -301,6 +307,7 @@ final class DriveImageCache {
                             temporary.delete();
                             DriveLog.failure(caption(item) ? "cache.captions" : "cache.image", failure);
                             failed++;
+                            synced = false;
                             if (previous == null || caption(item) != caption(previous) || imageFile(dir, previous).length() > maxBytes(item, config)
                                     || !accepted(previous, config)) continue;
                             used += linkOrCopy(imageFile(dir, previous), target, config.cacheBytes - used);
@@ -309,6 +316,10 @@ final class DriveImageCache {
                     }
                     saved.put("themePath", relative).put("cacheFile", snapshot + "/" + relative).put("size", target.length());
                     next.put(saved);
+                    if (!caption(item) && synced) {
+                        readyImages++;
+                        DriveProgress.update(config, DriveProgress.Phase.IMAGES, readyImages, totalImages);
+                    }
                 } finally { temporary.delete(); }
             }
             check.check();

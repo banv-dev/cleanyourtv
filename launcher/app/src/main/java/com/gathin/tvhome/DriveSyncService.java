@@ -32,6 +32,7 @@ public final class DriveSyncService extends JobService {
                     + " cachedImages=" + DriveImageCache.images(this, config).size());
             try {
                 check.check();
+                DriveProgress.update(config, DriveProgress.Phase.PREPARING, 0, -1);
                 DriveSync.status(this, "Syncing");
                 stage = "auth.load";
                 DriveImageRepository repository = new DriveImageRepository(new DriveAuthManager(this), check);
@@ -41,11 +42,13 @@ public final class DriveSyncService extends JobService {
                 DriveLog.event("job=" + parameters.getJobId() + " finished complete=" + complete
                         + " cachedImages=" + DriveImageCache.images(this, config).size()
                         + " elapsedMs=" + (android.os.SystemClock.elapsedRealtime() - started));
+                DriveProgress.finish(config, complete ? DriveProgress.Phase.COMPLETE : DriveProgress.Phase.PARTIAL);
                 DriveSync.notifyImages();
             } catch (Exception failure) {
                 if (!task.stopped.get()) {
                     String detail = DriveLog.failure(stage, failure);
                     DriveSync.status(this, "Sync failed; keeping cached images. " + detail);
+                    DriveProgress.finish(config, DriveProgress.Phase.ERROR);
                 } else DriveLog.event("job=" + parameters.getJobId() + " cancelled; cache preserved");
             } finally {
                 tasks.remove(parameters.getJobId(), task);
@@ -62,7 +65,9 @@ public final class DriveSyncService extends JobService {
             if (task.future != null) task.future.cancel(true);
         }
         DriveConfig config = DriveConfig.load(this);
-        return config.enabled && config.identity().equals(parameters.getExtras().getString("source"));
+        boolean retry = config.enabled && config.identity().equals(parameters.getExtras().getString("source"));
+        if (retry) DriveProgress.finish(config, DriveProgress.Phase.QUEUED);
+        return retry;
     }
     @Override public void onDestroy() {
         for (Task task : tasks.values()) { task.stopped.set(true); if (task.future != null) task.future.cancel(true); }

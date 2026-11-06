@@ -158,3 +158,32 @@ Retention verification: 344 unit tests passed (one opt-in live test skipped), 35
 passed, and release APK assembled. Tests cover A → B → A without image redownload, configurable expiry,
 use resetting the deadline, shared-folder ownership, backward clocks, background sync not extending
 retention and migration grace for existing caches. No real-TV retention run has been performed.
+
+## Sync progress Toast
+
+Only after selecting a different theme in Launcher Settings, and only if that source has no usable
+cached images, the next Home session shows sync Toasts centered at the bottom: waiting for Android/network, checking
+the list, then percentage and synchronized image count (for example `40% (4/10 images)`). The total
+is known only after root/collection pagination finishes. Percentage is based on successfully downloaded
+or reused images, not bytes; captions do not inflate the image count. Failed image updates retaining
+old bytes are not counted as synchronized. Full completion is announced only after the snapshot is
+published; partial/error and verified empty-folder results have separate messages.
+
+Only the active source can display progress. The Settings selection arms a one-use presentation request;
+completion, failure, or leaving Home ends it. Pressing Home, returning from another app, manual sync,
+and periodic/background sync do not arm a request. Selecting a source with cached images stays silent,
+even while its metadata/content refresh runs. Leaving Home cancels the Toast and timers; returning
+without another Settings theme selection does not replay progress. Updates are coalesced to at most one Toast per two
+seconds, with a three-second refresh while work is in progress; terminal results display immediately.
+Queued jobs show one waiting message until Android starts them. The foreground custom Toast keeps
+bottom positioning on newer Android versions and requires no overlay permission.
+
+Progress verification: release APK assembled; 349 unit tests passed, with one opt-in live test skipped.
+Tests cover percentage/counts, image/caption separation, bottom gravity, throttling, partial/error
+results, stopping Home and suppressing stale-source progress. Real-TV visual checks remain
+pending.
+
+Toast eligibility update verified: 352 unit tests passed (one opt-in live test skipped) and release APK
+assembled. Tests confirm ordinary Home launches and returning Home stay silent, cached-theme selection
+stays silent, terminal sync ends the one-use session, and a new cold-cache Settings selection can show
+progress again. Real-TV checks remain pending.

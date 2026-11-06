@@ -116,6 +116,9 @@ public class DriveImagesTest {
         assertFalse(DriveImageCache.sync(context, config, repository(), () -> {}));
         List<File> images = DriveImageCache.images(context, config); assertEquals(2, images.size()); assertEquals("wallpaper.jpg", images.get(0).getName());
         assertArrayEquals(png, Files.readAllBytes(images.get(0).toPath()));
+        assertEquals(2, DriveProgress.state(config).total);
+        assertEquals(1, DriveProgress.state(config).done); // failed update retains old bytes but is not synced
+
     }
     @Test public void cancelledSyncNeverPublishes() throws Exception {
         initialSync(); List<File> previous = DriveImageCache.images(context, config);
@@ -220,6 +223,8 @@ public class DriveImagesTest {
         assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
         assertEquals(1, DriveImageCache.images(context, config).size());
         assertEquals("First caption", DriveImageCache.captions(context, config).get("photo-2.png"));
+        assertEquals(1, DriveProgress.state(config).total); // captions are not images
+        assertEquals(1, DriveProgress.state(config).done);
         assertEquals(DriveImageCache.collection(context, config).get(0).getParentFile(), DriveImageCache.captionsFile(context, config).getParentFile());
         byte[] v2 = "photo-2.png\tUpdated caption\n".getBytes(StandardCharsets.UTF_8);
         folder(); listing(collectionFolder()); folder(); listing(captionItem("v2", v2), item("two", "photo-2.png", "v1")); text(v2);
@@ -356,6 +361,21 @@ public class DriveImagesTest {
             assertFalse(invalid.enabled); assertEquals("googleDrive.cacheRetentionDays", invalid.error);
         }
         assertEquals(60, parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":60}").cacheRetentionDays);
+    }
+    @Test public void selectingThemeWithCachedImagesDoesNotShowSyncProgressToast() throws Exception {
+        initialSync();
+        File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();
+        Files.write(new File(dir, com.gathin.tvhome.Config.FILE_NAME).toPath(),
+                "{\"googleDrive\":{\"folderId\":\"test-folder\"}}".getBytes(StandardCharsets.UTF_8));
+        DriveProgress.themeSelected(context, config);
+        org.robolectric.shadows.ShadowToast.reset();
+        DriveProgress progress = new DriveProgress(context, config);
+        try {
+            progress.start();
+            DriveProgress.update(config, DriveProgress.Phase.PREPARING, 0, -1);
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            assertEquals(0, org.robolectric.shadows.ShadowToast.shownToastCount());
+        } finally { progress.stop(); }
     }
     @Test public void schedulerHonorsZeroAndCancelsChangedSource() throws Exception {
         File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();

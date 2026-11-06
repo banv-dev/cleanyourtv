@@ -27,6 +27,17 @@ folderId thì giữ cache đến khi tất cả theme đó hết hạn. Quay l�
 đã đổi sau khi so metadata. Kiểm tra hết hạn khi sync liệt kê thành công; không xóa sớm cache còn hạn
 để nhường dung lượng. Quy tắc này thay thế mọi mô tả thu hồi cache nguồn cũ ngay khi đổi theme bên dưới.
 
+### Thông báo tiến trình đồng bộ trên Home
+
+Chỉ sau khi chọn theme khác trong Settings và nguồn đó chưa có ảnh cache, dùng Toast trong phiên
+Home kế tiếp ở giữa phía dưới màn hình để báo trạng thái chờ, đọc danh sách,
+phần trăm và số ảnh đã đồng bộ/tổng số. Tổng số chỉ được xác định sau khi đọc hết các trang metadata.
+Phần trăm = số ảnh tải hoặc tái sử dụng thành công / tổng số ảnh; không tính captions.txt. Chỉ báo
+hoàn tất sau khi công bố snapshot, phân biệt kết quả chưa đầy đủ/thất bại/rỗng. Gộp các cập nhật nhanh,
+ẩn Toast khi rời Home và không hiển thị thông báo của nguồn theme cũ. Yêu cầu hiển thị chỉ dùng một
+lần; nhấn Home, quay lại từ ứng dụng khác hoặc sync nền không kích hoạt Toast. Nếu theme đã có ảnh
+cache thì không hiển thị progress Toast, kể cả khi đang kiểm tra/cập nhật nguồn đó.
+
 ## 1. Mục tiêu
 
 Launcher tự đọc và hiển thị ảnh từ **thư mục Google Drive có quyền Restricted được chỉ định bởi theme đang cài đặt**, không yêu cầu người dùng TV đăng nhập Google, không dùng backend trung gian. Chủ sở hữu chỉ cần tải thêm, sửa hoặc xóa ảnh trong thư mục để nội dung trên TV được cập nhật tại lần đồng bộ tiếp theo.
