@@ -433,9 +433,10 @@ final class Config {
     /** The folder the theme tools push into; null when external storage is unavailable. */
     static File dir(Context ctx) {
         File root = rootDir(ctx);
-        if (root == null) return null;
         String selected = ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE).getString("selected_theme", "");
-        if (selected == null || selected.isEmpty()) return root;
+        File drive = DriveThemes.directory(ctx, selected);
+        if (drive != null) return drive;
+        if (root == null || selected == null || selected.isEmpty()) return root;
         if (!selected.matches("[A-Za-z0-9_.-]+") || selected.equals(".") || selected.equals("..")) return root;
         File theme = new File(new File(root, "themes"), selected);
         return theme.isDirectory() ? theme : root;
@@ -569,8 +570,10 @@ final class Config {
 
         File dir = dir(ctx);
         File file = dir != null ? new File(dir, FILE_NAME) : null;
-        boolean mounted = Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState());
-        JSONObject json = readOverlay(ctx, file, mounted);
+        boolean driveSelected = !DriveThemes.folderId(ctx.getSharedPreferences(SETTINGS_NAME, Context.MODE_PRIVATE)
+                .getString("selected_theme", "")).isEmpty();
+        boolean mounted = driveSelected || Environment.MEDIA_MOUNTED.equals(Environment.getExternalStorageState());
+        JSONObject json = driveSelected ? DriveImageCache.readThemeConfig(file) : readOverlay(ctx, file, mounted);
         if (json != null) {
             applied = true;
             dock = stringList(json, "dock_apps", dock);
@@ -726,6 +729,20 @@ final class Config {
             wallpaper = chosen.isEmpty() ? null : chosen.get(0);
             wallpaperEnabled = !chosen.isEmpty();
         }
+        DriveConfig drive = DriveConfig.load(ctx);
+        if (drive.displaysCache()) {
+            wallpapers.clear();
+            if (wallpaperEnabled && !"none".equals(wallpaperChoice)) wallpapers.addAll(DriveImageCache.playable(ctx, drive, rotationMinutes, wallpaperChoice));
+            wallpaper = wallpapers.isEmpty() ? null : wallpapers.get(0);
+            String choiceKind = wallpaperChoice == null ? "theme-default" : "none".equals(wallpaperChoice) ? "none" : "custom";
+            DriveLog.event("stage=wallpaper.select configLoaded=" + (json != null) + " enabled=" + wallpaperEnabled
+                    + " rotationMinutes=" + rotationMinutes + " selectedImages=" + wallpapers.size() + " choice=" + choiceKind);
+            if (wallpapers.isEmpty()) {
+                if (!wallpaperEnabled) DriveLog.event("stage=wallpaper.select wallpaper disabled by theme/choice");
+                else if (json == null) DriveLog.event("stage=wallpaper.select waiting for valid theme snapshot");
+                else android.util.Log.w(DriveLog.TAG, "stage=wallpaper.select no playable images; check MIME types and cache files");
+            }
+        }
         // A festive skin comes only from a theme; config.xml has no festival. seasonal_skin names one the same way
         // but launchers before it ignore the key, so a theme can carry it without older ones showing the diya skin.
         Festival festival = json == null ? Festival.NONE : Festival.parse(festivalName(json),
@@ -824,7 +841,7 @@ final class Config {
      * start before the card is mounted (seen at every boot on a Xiaomi MiTV-MTEQ0), and without the copy it comes
      * up with the built-in dock order. A missing file on mounted storage still means no overlay.
      */
-    private static JSONObject readOverlay(Context ctx, File file, boolean mounted) {
+    static synchronized JSONObject readOverlay(Context ctx, File file, boolean mounted) {
         File copy = new File(ctx.getFilesDir(), FILE_NAME);
         if (!mounted) return read(copy);
         JSONObject json = read(file);

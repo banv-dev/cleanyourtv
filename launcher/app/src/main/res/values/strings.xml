@@ -257,4 +257,21 @@
     <string name="clock_format_system">System</string>
     <string name="clock_format_12">12-hour</string>
     <string name="clock_format_24">24-hour</string>
+    <string name="drive_sync_now">Google Drive: Sync now</string>
+    <string name="drive_sync_queued">Sync queued; waiting for network</string>
+    <string name="drive_sync_disabled">Google Drive is disabled or misconfigured</string>
+    <string name="drive_progress_queued">Đã lên lịch đồng bộ ảnh; đang chờ mạng hoặc hệ thống.</string>
+    <string name="drive_progress_preparing">Đang kết nối Drive và kiểm tra danh sách ảnh…</string>
+    <string name="drive_progress_images">Đồng bộ ảnh: %1$d%% (%2$d/%3$d ảnh)</string>
+    <string name="drive_progress_complete">Đã đồng bộ ảnh: %1$d%% (%2$d/%3$d ảnh)</string>
+    <string name="drive_progress_partial">Đồng bộ chưa đầy đủ: %1$d%% (%2$d/%3$d ảnh). Kiểm tra ảnh/caption và dung lượng.</string>
+    <string name="drive_progress_empty">Đồng bộ xong: thư mục không có ảnh phù hợp.</string>
+    <string name="drive_progress_error">Đồng bộ ảnh thất bại; giữ cache hiện có. Kiểm tra mạng và cấu hình Drive.</string>
+    <string name="drive_theme_source">Google Drive</string>
+    <string name="drive_theme_unnamed">Theme</string>
+    <string name="drive_theme_loading">Đang tải danh sách theme từ Google Drive…</string>
+    <string name="drive_theme_config_error">Chưa cấu hình thư mục theme Google Drive hợp lệ.</string>
+    <string name="drive_theme_empty">Thư mục Drive chưa có thư mục theme con.</string>
+    <string name="drive_theme_load_error">Không thể tải danh sách theme. Kiểm tra mạng và quyền chia sẻ Drive.</string>
+    <string name="drive_theme_cached_catalog">Đang dùng danh sách theme Drive đã lưu.</string>
 </resources>

@@ -13,8 +13,8 @@ android {
         applicationId providers.gradleProperty('launcherApplicationId').getOrElse('com.gathin.tvhome')
         minSdk 26
         targetSdk 34
-        versionCode 12
-        versionName '3.3'
+        versionCode 13
+        versionName '3.4'
     }
 
     buildTypes {
@@ -32,9 +32,11 @@ android {
         resources {
             // Kotlin metadata pulled in by AndroidX's dependencies. This launcher is plain Java and never reads it;
             // leaving it out saves about 14 KB of every install.
-            excludes += ['kotlin/**', 'META-INF/*.version', 'META-INF/*.kotlin_module', 'DebugProbesKt.bin']
+            excludes += ['META-INF/INDEX.LIST', 'META-INF/DEPENDENCIES', 'kotlin/**', 'META-INF/*.version', 'META-INF/*.kotlin_module', 'DebugProbesKt.bin']
         }
     }
+
+    testOptions { unitTests.includeAndroidResources = true }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -43,8 +45,21 @@ android {
 }
 
 dependencies {
+    implementation 'com.google.auth:google-auth-library-oauth2-http:1.30.1'
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     implementation 'androidx.dynamicanimation:dynamicanimation:1.0.0'
     // Test only (never in the APK): plain JVM tests for the module card validators, src/test.
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.13'
+    testImplementation 'com.squareup.okhttp3:mockwebserver:4.12.0'
 }
+
+// Only this named local file is copied: never put credentials in a theme or commit generated assets.
+def driveCredentials = layout.projectDirectory.file('src/main/google_service_account.json')
+def driveAssets = layout.buildDirectory.dir('generated/driveAssets')
+tasks.register('prepareDriveCredentials', Sync) {
+    from(driveCredentials) { rename { 'service-account.json' } }
+    into(driveAssets)
+}
+android.sourceSets.main.assets.srcDir(driveAssets)
+tasks.named('preBuild').configure { dependsOn('prepareDriveCredentials') }

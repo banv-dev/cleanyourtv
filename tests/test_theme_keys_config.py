@@ -62,6 +62,13 @@ QUERIES_PACKAGE = re.compile(r'<package\s+android:name="([^"]+)"')
 # The keys read from config.xml on purpose that the table must not list, each with the page that
 # documents it instead.
 EXEMPT = {
+    "drive_theme_dir": "launcher/DRIVE_IMAGES.md: resource-only library folder",
+    "drive_sync_interval": "launcher/DRIVE_IMAGES.md: resource-only sync interval",
+    "drive_sync_on_launch": "launcher/DRIVE_IMAGES.md: resource-only launch sync",
+    "drive_cache_retention_days": "launcher/DRIVE_IMAGES.md: resource-only retention",
+    "drive_cache_max_size_mb": "launcher/DRIVE_IMAGES.md: resource-only cache limit",
+    "drive_max_file_size_mb": "launcher/DRIVE_IMAGES.md: resource-only file limit",
+    "drive_supported_mime_types": "launcher/DRIVE_IMAGES.md: resource-only MIME whitelist",
     "latitude": "docs/sky.md: the sky's place, a build setting no theme can move",
     "longitude": "docs/sky.md: the sky's place, a build setting no theme can move",
 }
@@ -254,6 +261,14 @@ class KeysTableCoversConfigXmlTest(unittest.TestCase):
         sky = SKY_VIEW.read_text(encoding="utf-8")
         for name in EXEMPT:
             with self.subTest(key=name):
+                if name.startswith("drive_"):
+                    drive_xml = CONFIG_XML.with_name("drive.xml").read_text(encoding="utf-8")
+                    self.assertIn(name, config_keys(drive_xml), f"`{name}` must be defined in drive.xml")
+                    self.assertNotIn(name, config, f"`{name}` must not be duplicated in config.xml")
+                    drive = (JAVA_DIR / "DriveConfig.java").read_text(encoding="utf-8")
+                    self.assertRegex(drive, rf"R\.(?:integer|string|bool)\.{name}")
+                    self.assertIn(name, (ROOT / "launcher/DRIVE_IMAGES.md").read_text(encoding="utf-8"))
+                    continue
                 self.assertIn(name, config, f"`{name}` is gone from config.xml: drop its EXEMPT entry")
                 self.assertIn(f"R.string.{name}", sky, f"SkyView.java no longer reads `{name}`: is the "
                                                       f"docs/sky.md page still right?")

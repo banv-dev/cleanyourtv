@@ -24,3 +24,7 @@ launcher/replay_pid*.log
 .idea/
 
 themes/
+
+# Private Google Drive service-account keys and generated credential assets.
+**/google_service_account.json
+**/service-account.json

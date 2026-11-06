@@ -31,6 +31,11 @@ import java.util.concurrent.Executors;
 
 /** Displays and rotates a theme's local wallpaper images while Home is visible. */
 final class WallpaperPlayer {
+    private final Context context;
+    private final DriveConfig drive;
+    private final DriveProgress driveProgress;
+    private final boolean driveVisible;
+    private final Runnable driveChanged = this::refreshDrive;
     private final FrameLayout root;
     private final ImageView image;
     private final int backgroundColor;
@@ -52,9 +57,11 @@ final class WallpaperPlayer {
     private boolean closed;
     private boolean loading;
     private String displayed = "";
+    private String displayedPath = "";
+    private long driveUseRecordedAt;
     /** wallpaper_captions: the shown picture's name from wallpapers/captions.txt; null when off or there are none. */
     private final TextView caption;
-    private final Map<String, String> names;
+    private Map<String, String> names;
     /** wallpaper_moods: the collection's groups by time of day; empty rotates through all of it. */
     private final Map<String, Set<String>> moods;
     /** config.xml latitude and longitude for the sun's times, and today's {sunrise, sunset} once worked out. */
@@ -63,6 +70,11 @@ final class WallpaperPlayer {
     private int[] sun;
 
     WallpaperPlayer(Context context, FrameLayout root, Config config) {
+        this.context = context.getApplicationContext();
+        drive = DriveConfig.load(context);
+        driveProgress = new DriveProgress(context, drive);
+        driveVisible = drive.displaysCache() && config.wallpaperEnabled && !"none".equals(context
+                .getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE).getString(Config.WALLPAPER_CHOICE_KEY, null));
         this.root = root;
         backgroundColor = config.backgroundColor;
         files = new ArrayList<>(config.wallpapers);
@@ -88,13 +100,15 @@ final class WallpaperPlayer {
         image = new ImageView(context);
         image.setScaleType(ImageView.ScaleType.CENTER_CROP);
         image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        names = config.wallpaperCaptions && config.wallpaperEnabled && !files.isEmpty()
-                ? WallpaperCaptions.read(files.get(0).getParentFile()) : Collections.emptyMap();
-        caption = names.isEmpty() ? null : makeCaption(context, root);
-        if (config.wallpaperEnabled && !files.isEmpty()) {
+        boolean captionsEnabled = config.wallpaperCaptions && config.wallpaperEnabled;
+        names = captionsEnabled ? (drive.displaysCache() ? DriveImageCache.captions(context, drive)
+                : files.isEmpty() ? Collections.emptyMap() : WallpaperCaptions.read(files.get(0).getParentFile()))
+                : Collections.emptyMap();
+        caption = captionsEnabled && (driveVisible || !names.isEmpty()) ? makeCaption(context, root) : null;
+        if (config.wallpaperEnabled && (!files.isEmpty() || driveVisible)) {
             root.addView(image, 0, new FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            showFirst();
+            if (!files.isEmpty()) showFirst();
         }
     }
 
@@ -115,6 +129,7 @@ final class WallpaperPlayer {
                 // The picture covers the whole screen: the root's plain colour under it is overdraw.
                 root.setBackground(null);
                 displayed = first.getName();
+                displayedPath = first.getPath();
                 showCaption(false);
                 if (!displayed.equals(previous)) {
                     preferences.edit().putString("image", displayed)
@@ -122,6 +137,7 @@ final class WallpaperPlayer {
                 }
                 return;
             }
+            if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode initial image rejected; trying another cached image");
             files.remove(first);   // unreadable or over 4K: try another, or keep the plain colour
             playable = playable();
             first = WallpaperRotation.pick(playable, previous, order, random);
@@ -130,11 +146,36 @@ final class WallpaperPlayer {
 
     void start() {
         active = true;
+        driveProgress.start();
+        DriveSync.listen(driveChanged);
+        refreshDrive();
+        DriveSync.schedule(context, true);
         update();
     }
 
     void stop() {
+        driveProgress.stop();
+        if (active) DriveImageCache.markUsed(context, drive);
+        DriveSync.unlisten(driveChanged);
         active = false;
+    }
+
+    private void refreshDrive() {
+        if (!driveVisible || closed || !drive.identity().equals(DriveConfig.load(context).identity())) return;
+        if (caption != null) {
+            names = DriveImageCache.captions(context, drive);
+            showCaption(false);
+        }
+        List<File> fresh = DriveImageCache.playable(context, drive, (int) (interval / 60000L),
+                context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
+                        .getString(Config.WALLPAPER_CHOICE_KEY, null));
+        if (fresh.equals(files)) return;
+        files.clear();
+        files.addAll(fresh);
+        if (files.isEmpty()) {
+            releaseForMemoryPressure();
+            preferences.edit().remove("image").remove("changed").apply();
+        } else if (current == null) update();
     }
 
     /** Drops the wallpaper texture when Home is hidden and Android asks the process to free memory. */
@@ -145,6 +186,8 @@ final class WallpaperPlayer {
         // let Android reclaim its native buffer after rendering releases it instead of recycling it mid-frame.
         current = null;
         displayed = "";
+        displayedPath = "";
+        showCaption(false);
         root.setBackgroundColor(backgroundColor);
     }
 
@@ -160,12 +203,21 @@ final class WallpaperPlayer {
     }
 
     void close() {
+        driveProgress.stop();
         active = false;
         closed = true;
+        DriveSync.unlisten(driveChanged);
         decoder.shutdownNow();
     }
 
     void update() {
+        if (active && !closed) {
+            long now = System.currentTimeMillis();
+            if (driveUseRecordedAt == 0 || now < driveUseRecordedAt || now - driveUseRecordedAt >= 3600000L) {
+                DriveImageCache.markUsed(context, drive);
+                driveUseRecordedAt = now;
+            }
+        }
         if (!active || closed || loading || files.isEmpty()) return;
         String previous = preferences.getString("image", "");
         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.
@@ -175,7 +227,7 @@ final class WallpaperPlayer {
         if (selected == null || WallpaperRotation.due(changed, System.currentTimeMillis(), interval)) {
             selected = WallpaperRotation.pick(playable, previous, order, random);
         }
-        if (selected == null || selected.getName().equals(displayed)) return;
+        if (selected == null || selected.getPath().equals(displayedPath)) return;
         File next = selected;
         loading = true;
         decoder.execute(() -> {
@@ -188,12 +240,14 @@ final class WallpaperPlayer {
                 }
                 if (bitmap == null) {
                     files.remove(next);
-                    Log.w("TvHome.Wallpaper", "Skipping unreadable image: " + next.getName());
+                    if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode cached image rejected; trying another");
+                    else Log.w("TvHome.Wallpaper", "Skipping unreadable image: " + next.getName());
                     update();
                     return;
                 }
                 show(bitmap);
                 displayed = next.getName();
+                displayedPath = next.getPath();
                 showCaption(true);
                 if (!displayed.equals(previous) || changed == 0) {
                     preferences.edit().putString("image", displayed)
@@ -238,6 +292,8 @@ final class WallpaperPlayer {
         caption.animate().cancel();
         if (name == null) {
             caption.setAlpha(0f);
+            caption.setText("");
+            caption.setContentDescription(null);
             return;
         }
         caption.setContentDescription(name);
@@ -275,9 +331,15 @@ final class WallpaperPlayer {
             options.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(file.getPath(), options);
             int width = options.outWidth, height = options.outHeight;
-            if (width <= 0 || height <= 0) return null;
+            if (width <= 0 || height <= 0) {
+                if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode reason=invalid-image-bounds");
+                return null;
+            }
             int sample = WallpaperSize.sampleSize(width, height, this.width, this.height);
-            if (!WallpaperSize.accepted(width / sample, height / sample)) return null;
+            if (!WallpaperSize.accepted(width / sample, height / sample)) {
+                if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode reason=pixel-limit width=" + width + " height=" + height + " sample=" + sample);
+                return null;
+            }
             options.inJustDecodeBounds = false;
             options.inSampleSize = sample;
             int[] scale = WallpaperSize.coverScale(width / sample, height / sample, this.width, this.height);
@@ -289,7 +351,11 @@ final class WallpaperPlayer {
             options.inPreferredConfig = bitmapConfig;
             options.inMutable = dimColor != 0;
             Bitmap decoded = BitmapFactory.decodeFile(file.getPath(), options);
-            if (decoded == null) return null;
+            if (decoded == null) {
+                if (drive.displaysCache()) Log.w(DriveLog.TAG, "stage=wallpaper.decode reason=bitmap-decoder-returned-null");
+                return null;
+            }
+            if (drive.displaysCache()) DriveLog.event("stage=wallpaper.decode bitmap ready width=" + decoded.getWidth() + " height=" + decoded.getHeight());
             if (dimColor != 0) new Canvas(decoded).drawColor(dimColor);
             // One copy in GPU memory instead of a software bitmap plus its texture; the decode stays off the UI
             // thread for rotations, and Home's return no longer uploads 4-8 MB to the GPU.
@@ -298,6 +364,7 @@ final class WallpaperPlayer {
             decoded.recycle();
             return gpu;
         } catch (Exception | OutOfMemoryError failure) {
+            if (drive.displaysCache()) DriveLog.failure("wallpaper.decode", failure);
             return null;
         }
     }

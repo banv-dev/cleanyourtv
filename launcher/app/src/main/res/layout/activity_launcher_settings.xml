@@ -73,6 +73,10 @@
             style="@style/SettingsRow"
             android:layout_marginTop="28dp" />
 
+        <TextView android:id="@+id/driveSyncChoice" style="@style/SettingsRow"
+            android:layout_marginTop="10dp"
+            android:text="@string/drive_sync_now" android:visibility="gone" />
+
         <TextView
             android:id="@+id/languageChoice"
             style="@style/SettingsRow"
