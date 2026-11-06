@@ -256,6 +256,7 @@ public final class LauncherSettingsActivity extends Activity {
                     choices.edit().putString("selected_theme", next).remove(Config.WALLPAPER_CHOICE_KEY)
                             .remove("columns").remove(Config.ROWS_BELOW_DOCK_KEY).remove("animations")
                             .remove("advanced_effects").apply();
+                    DriveImageCache.markUsed(this, DriveConfig.load(this));
                     DriveSync.schedule(this, false);
                     changed();
                     Toast.makeText(this, R.string.theme_applied, Toast.LENGTH_SHORT).show();

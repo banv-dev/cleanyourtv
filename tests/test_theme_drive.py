@@ -11,11 +11,13 @@ SPEC.loader.exec_module(DRIVE)
 class ThemeDriveTest(unittest.TestCase):
     def test_defaults_disabled_and_manual(self):
         for theme in ({}, {"googleDrive": {"enabled": False}}, {"googleDrive": {"folderId": "folder-1"}},
-                      {"googleDrive": {"folderId": "folder-1", "syncInterval": 0, "syncOnLaunch": False}}):
+                      {"googleDrive": {"folderId": "folder-1", "syncInterval": 0, "syncOnLaunch": False, "cacheRetentionDays": 30}}):
             DRIVE.validate(theme)
 
     def test_bad_types_and_ranges(self):
-        for drive in (None, [], {"folderId": ""}, {"folderId": "https://drive.google.com/folders/abc"},
+        for drive in ({"folderId": "abc", "cacheRetentionDays": 0}, {"folderId": "abc", "cacheRetentionDays": -1},
+                      {"folderId": "abc", "cacheRetentionDays": True}, {"folderId": "abc", "cacheRetentionDays": 1.5},
+                      {"folderId": "abc", "cacheRetentionDays": "30"}, {"folderId": "abc", "cacheRetentionDays": 2147483648}, None, [], {"folderId": ""}, {"folderId": "https://drive.google.com/folders/abc"},
                       {"folderId": "abc", "enabled": 1}, {"folderId": "abc", "syncInterval": True},
                       {"folderId": "abc", "syncInterval": -1}, {"folderId": "abc", "syncInterval": 1.1},
                       {"folderId": "abc", "syncInterval": 2147483648}, {"folderId": "abc", "syncOnLaunch": "true"}):

@@ -13,16 +13,17 @@ import java.util.Set;
 final class DriveConfig {
     final boolean enabled, syncOnLaunch;
     final String folderId, themeId, error;
-    final int intervalMinutes;
+    final int intervalMinutes, cacheRetentionDays;
     final long cacheBytes, maxFileBytes;
     final Set<String> mimeTypes;
 
     private DriveConfig(Context context, boolean enabled, String folder, String theme,
-                        int interval, boolean onLaunch, String error) {
+                        int interval, boolean onLaunch, int retentionDays, String error) {
         this.enabled = enabled;
         folderId = folder;
         themeId = theme;
         intervalMinutes = interval;
+        cacheRetentionDays = retentionDays;
         syncOnLaunch = onLaunch;
         this.error = error;
         cacheBytes = Math.max(1L, context.getResources().getInteger(R.integer.drive_cache_max_size_mb)) * 1048576L;
@@ -41,16 +42,16 @@ final class DriveConfig {
         String themeId = context.getSharedPreferences(Config.SETTINGS_NAME, Context.MODE_PRIVATE)
                 .getString("selected_theme", "");
         String folder = "", error = "";
-        int interval = 360;
+        int interval = 360, retentionDays = 30;
         boolean enabled = false, launch = true;
         try {
             Object value = theme == null ? null : theme.opt("googleDrive");
-            if (value == null) return new DriveConfig(context, false, "", themeId, interval, launch, "");
+            if (value == null) return new DriveConfig(context, false, "", themeId, interval, launch, retentionDays, "");
             if (!(value instanceof JSONObject)) throw new IllegalArgumentException("googleDrive");
             JSONObject drive = (JSONObject) value;
             Object flag = drive.opt("enabled");
             if (flag != null && !(flag instanceof Boolean)) throw new IllegalArgumentException("googleDrive.enabled");
-            if (Boolean.FALSE.equals(flag)) return new DriveConfig(context, false, "", themeId, interval, launch, "");
+            if (Boolean.FALSE.equals(flag)) return new DriveConfig(context, false, "", themeId, interval, launch, retentionDays, "");
             Object id = drive.opt("folderId");
             if (!(id instanceof String) || !((String) id).matches("[A-Za-z0-9_-]+"))
                 throw new IllegalArgumentException("googleDrive.folderId");
@@ -62,6 +63,13 @@ final class DriveConfig {
                     throw new IllegalArgumentException("googleDrive.syncInterval");
                 interval = ((Number) minutes).intValue();
             }
+            Object retention = drive.opt("cacheRetentionDays");
+            if (retention != null) {
+                if (!(retention instanceof Integer || retention instanceof Long) || ((Number) retention).longValue() < 1
+                        || ((Number) retention).longValue() > Integer.MAX_VALUE)
+                    throw new IllegalArgumentException("googleDrive.cacheRetentionDays");
+                retentionDays = ((Number) retention).intValue();
+            }
             Object start = drive.opt("syncOnLaunch");
             if (start != null && !(start instanceof Boolean)) throw new IllegalArgumentException("googleDrive.syncOnLaunch");
             launch = start == null || (Boolean) start;
@@ -70,11 +78,11 @@ final class DriveConfig {
             error = exception.getMessage();
             Log.w("TvHome.Drive", "Theme " + themeId + ": invalid " + error);
         }
-        return new DriveConfig(context, enabled, folder, themeId, interval, launch, error);
+        return new DriveConfig(context, enabled, folder, themeId, interval, launch, retentionDays, error);
     }
 
     boolean displaysCache() { return enabled || (!error.isEmpty() && !folderId.isEmpty()); }
 
     String identity() { return "theme-layout-v2:" + themeId + ":" + folderId + ":" + enabled + ":" + intervalMinutes + ":" + syncOnLaunch
-            + ":" + cacheBytes + ":" + maxFileBytes + ":" + new java.util.TreeSet<>(mimeTypes); }
+            + ":" + cacheRetentionDays + ":" + cacheBytes + ":" + maxFileBytes + ":" + new java.util.TreeSet<>(mimeTypes); }
 }

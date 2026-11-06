@@ -38,7 +38,8 @@ folders or duplicate image paths are rejected rather than selected arbitrarily.
      "enabled": true,
      "folderId": "THEME_ROOT_FOLDER_ID",
      "syncInterval": 360,
-     "syncOnLaunch": true
+     "syncOnLaunch": true,
+     "cacheRetentionDays": 30
    }
    ```
 
@@ -95,11 +96,32 @@ an atomic manifest switch are old snapshots removed. A fully unchanged sync keep
 changed image bytes are reloaded even when their original filename is unchanged.
 
 Missing `wallpaper.jpg`/`wallpapers/` is allowed. A verified empty source removes previously synced images;
-a denied or incomplete collection listing does not. Inactive-source caches and abandoned snapshots are
-evicted first. Published active images are preserved when space is insufficient, so replacements can
-require temporary free space. Changing the source cancels obsolete jobs. Periodic jobs survive reboot;
+a denied or incomplete collection listing does not. Inactive-source caches are evicted only after
+their retention has elapsed; abandoned snapshots within the current source are removed separately. Published active images and unexpired inactive-source caches are preserved when
+space is insufficient, so new downloads can be partial and replacements may need temporary free space.
+Changing the source cancels obsolete jobs. Periodic jobs survive reboot;
 Android can delay them for network/power constraints. Old flat `.img` cache manifests are replaced on
 the first successful sync with the new theme layout; the folder ID should now refer to the theme root.
+
+## Keeping caches across theme switches
+
+`googleDrive.cacheRetentionDays` is a positive integer in **days**, default **30**. Set it in each
+local theme's `config.json`. Switching A → B retains A's published images and captions. Returning to A
+uses its cache immediately, including offline; if metadata is unchanged, its next sync downloads no
+image/caption bytes.
+
+Usage is recorded when the theme is selected, when Home is shown/left, and periodically while Home
+stays visible using its existing update loop. Background sync does **not** reset last-use time.
+The current source is always protected. Inactive-source cache is removed only when all themes using
+that Drive folder have passed their individual retention deadlines. Themes sharing a folder share
+cache bytes but have separate usage records. Expiration is checked during sync after the full remote
+listing succeeds, so deletion can occur later than the exact deadline; no new background cleanup job
+is added. Existing caches without usage history receive a conservative 30-day grace period on upgrade.
+
+The resource `drive_cache_max_size_mb` remains the total cache budget across all sources. Unexpired
+caches are never removed early just to make room: if they fill the budget, another theme's sync can
+be partial until space is available or the limit is increased in config.xml. Normal remote-image
+replacement/deletion and removal of obsolete snapshots continue within the active source.
 
 ## Debugging and verification
 
@@ -131,3 +153,8 @@ caption add/update/delete, bad UTF-8, oversized/duplicate caption files and a ru
 receiving new captions without recreation. Release APK assembled. The separate real-account sync passed;
 the current source returned one image and no supported captions.txt, so live caption content remains
 unverified. No real-TV check has been performed.
+
+Retention verification: 344 unit tests passed (one opt-in live test skipped), 35 scoped theme-tool tests
+passed, and release APK assembled. Tests cover A → B → A without image redownload, configurable expiry,
+use resetting the deadline, shared-folder ownership, backward clocks, background sync not extending
+retention and migration grace for existing caches. No real-TV retention run has been performed.

@@ -18,6 +18,15 @@ Nếu các mục v1.1 bên dưới còn mô tả danh sách ảnh phẳng hoặc
 v1.2 này thay thế chúng. Chi tiết hiện hành và cách chọn ảnh được ghi tại
 [launcher/DRIVE_IMAGES.md](../launcher/DRIVE_IMAGES.md).
 
+### Giữ cache nhiều theme
+
+`googleDrive.cacheRetentionDays` trong JSON của mỗi theme là số ngày không sử dụng trước khi cache
+của nguồn đó có thể bị xóa; mặc định 30, nhận số nguyên dương. Chuyển theme không xóa cache nguồn cũ.
+Ghi nhận lần sử dụng khi chọn/hiển thị/rời Home; đồng bộ nền không gia hạn. Nếu nhiều theme dùng chung
+folderId thì giữ cache đến khi tất cả theme đó hết hạn. Quay lại theme đọc cache ngay, chỉ tải nội dung
+đã đổi sau khi so metadata. Kiểm tra hết hạn khi sync liệt kê thành công; không xóa sớm cache còn hạn
+để nhường dung lượng. Quy tắc này thay thế mọi mô tả thu hồi cache nguồn cũ ngay khi đổi theme bên dưới.
+
 ## 1. Mục tiêu
 
 Launcher tự đọc và hiển thị ảnh từ **thư mục Google Drive có quyền Restricted được chỉ định bởi theme đang cài đặt**, không yêu cầu người dùng TV đăng nhập Google, không dùng backend trung gian. Chủ sở hữu chỉ cần tải thêm, sửa hoặc xóa ảnh trong thư mục để nội dung trên TV được cập nhật tại lần đồng bộ tiếp theo.

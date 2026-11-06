@@ -61,7 +61,7 @@ public class DriveImagesTest {
     }
     @Test public void strictConfigAndDefaults() throws Exception {
         assertFalse(DriveConfig.parse(context, new JSONObject()).enabled);
-        assertTrue(config.enabled); assertTrue(config.syncOnLaunch); assertEquals(360, config.intervalMinutes);
+        assertTrue(config.enabled); assertTrue(config.syncOnLaunch); assertEquals(360, config.intervalMinutes); assertEquals(30, config.cacheRetentionDays);
         assertFalse(parse("{\"enabled\":false}").enabled);
         for (String invalid : new String[]{"null", "[]", "{\"folderId\":\"\"}", "{\"folderId\":\"https://drive.google.com/x\"}",
                 "{\"folderId\":\"a\",\"syncInterval\":-1}", "{\"folderId\":\"a\",\"syncInterval\":1.5}",
@@ -280,6 +280,82 @@ public class DriveImagesTest {
             assertEquals("", label.getText().toString());
             assertEquals(0f, label.getAlpha(), 0.001f);
         } finally { player.close(); }
+    }
+    @Test public void themeSwitchRetainsCacheAndReturningUnchangedSourceDoesNotDownload() throws Exception {
+        initialSync();
+        DriveImageCache.markUsed(context, config);
+        File a = DriveImageCache.images(context, config).get(0);
+        DriveConfig b = parse("{\"folderId\":\"folder-b\",\"cacheRetentionDays\":30}");
+        DriveImageCache.markUsed(context, b);
+        folder(); listing(item("b", "wallpaper.jpg", "v1")); image();
+        assertTrue(DriveImageCache.sync(context, b, repository(), () -> {}));
+        assertTrue(a.isFile());
+        assertEquals(a, DriveImageCache.images(context, config).get(0)); // available immediately, without network
+        folder(); listing(item("one", "wallpaper.jpg", "v1"));
+        int requests = server.getRequestCount();
+        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
+        assertEquals(2, server.getRequestCount() - requests); // only metadata
+        assertEquals(a, DriveImageCache.images(context, config).get(0));
+        assertEquals(1, DriveImageCache.images(context, b).size());
+    }
+    @Test public void retentionExpiresAfterConfiguredDaysAndUseResetsTheTimer() throws Exception {
+        initialSync();
+        long now = System.currentTimeMillis(), day = 86400000L;
+        DriveConfig a = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":7}");
+        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
+        DriveImageCache.markUsed(context, a, now);
+        File file = DriveImageCache.images(context, a).get(0);
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 6 * day);
+        assertTrue(file.isFile());
+        DriveImageCache.markUsed(context, a, now + 6 * day);
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 7 * day);
+        assertTrue(file.isFile());
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 13 * day);
+        assertFalse(DriveImageCache.directory(context, a).exists());
+    }
+    @Test public void sharedFolderRemainsUntilEveryThemesRetentionHasElapsed() throws Exception {
+        initialSync();
+        long now = System.currentTimeMillis(), day = 86400000L;
+        context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit().putString("selected_theme", "short").apply();
+        DriveConfig shortLease = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":7}");
+        context.getSharedPreferences(com.gathin.tvhome.Config.SETTINGS_NAME, Context.MODE_PRIVATE).edit().putString("selected_theme", "long").apply();
+        DriveConfig longLease = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":60}");
+        DriveImageCache.markUsed(context, shortLease, now);
+        DriveImageCache.markUsed(context, longLease, now);
+        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 30 * day);
+        assertEquals(1, DriveImageCache.images(context, config).size());
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 60 * day);
+        assertFalse(DriveImageCache.directory(context, config).exists());
+    }
+    @Test public void backgroundSyncDoesNotRefreshUsageAndClockRollbackDoesNotExpireCache() throws Exception {
+        initialSync();
+        long now = System.currentTimeMillis(), day = 86400000L;
+        DriveImageCache.markUsed(context, config, now - 31 * day);
+        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
+        DriveImageCache.evictExpired(context, b, () -> {}, now - 32 * day);
+        assertEquals(1, DriveImageCache.images(context, config).size());
+        folder(); listing(item("one", "wallpaper.jpg", "v1"));
+        assertTrue(DriveImageCache.sync(context, config, repository(), () -> {}));
+        DriveImageCache.evictExpired(context, b, () -> {}, now);
+        assertFalse(DriveImageCache.directory(context, config).exists());
+    }
+    @Test public void legacyCacheWithoutUsageHistoryGetsThirtyDayGrace() throws Exception {
+        initialSync();
+        long now = System.currentTimeMillis(), day = 86400000L;
+        DriveConfig b = parse("{\"folderId\":\"folder-b\"}");
+        DriveImageCache.evictExpired(context, b, () -> {}, now);
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 29 * day);
+        assertEquals(1, DriveImageCache.images(context, config).size());
+        DriveImageCache.evictExpired(context, b, () -> {}, now + 30 * day);
+        assertFalse(DriveImageCache.directory(context, config).exists());
+    }
+    @Test public void retentionConfigurationIsStrict() throws Exception {
+        for (String value : new String[]{"0", "-1", "true", "1.5", "\"30\"", "2147483648"}) {
+            DriveConfig invalid = parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":" + value + "}");
+            assertFalse(invalid.enabled); assertEquals("googleDrive.cacheRetentionDays", invalid.error);
+        }
+        assertEquals(60, parse("{\"folderId\":\"test-folder\",\"cacheRetentionDays\":60}").cacheRetentionDays);
     }
     @Test public void schedulerHonorsZeroAndCancelsChangedSource() throws Exception {
         File dir = com.gathin.tvhome.Config.dir(context); assertNotNull(dir); dir.mkdirs();

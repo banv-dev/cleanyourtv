@@ -6,6 +6,7 @@
     "enabled": true,
     "folderId": "",
     "syncInterval": 360,
-    "syncOnLaunch": true
+    "syncOnLaunch": true,
+    "cacheRetentionDays": 30
   }
 }

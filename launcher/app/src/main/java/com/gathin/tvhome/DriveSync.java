@@ -19,6 +19,7 @@ final class DriveSync {
     static void notifyImages() { new Handler(Looper.getMainLooper()).post(() -> { for (Runnable r : LISTENERS) r.run(); }); }
     static void schedule(Context context, boolean launching) {
         DriveConfig config = DriveConfig.load(context);
+        if (launching) DriveImageCache.markUsed(context, config);
         JobScheduler scheduler = context.getSystemService(JobScheduler.class);
         if (scheduler == null) { DriveLog.event("stage=schedule JobScheduler unavailable"); return; }
         DriveLog.event("stage=schedule theme=" + config.themeId + " enabled=" + config.enabled

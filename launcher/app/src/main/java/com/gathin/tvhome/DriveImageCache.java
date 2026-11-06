@@ -35,6 +35,72 @@ final class DriveImageCache {
     private static File root(Context context) { return new File(context.getFilesDir(), "drive-images"); }
     static File directory(Context context, DriveConfig config) { return new File(root(context), config.folderId); }
 
+    private static final String USAGE_PREFS = "drive_cache_usage";
+    private static final long DAY_MS = 86400000L;
+
+    /** User-visible use only; background sync must never extend a theme's retention lease. */
+    static void markUsed(Context context, DriveConfig config) { markUsed(context, config, System.currentTimeMillis()); }
+    static synchronized void markUsed(Context context, DriveConfig config, long now) {
+        if (!config.displaysCache() || config.folderId.isEmpty()) return;
+        android.content.SharedPreferences prefs = context.getSharedPreferences(USAGE_PREFS, Context.MODE_PRIVATE);
+        String key = config.folderId + ":theme:" + config.themeId;
+        JSONObject previous = usage(prefs.getAll().get(key));
+        long lastUsed = previous == null ? now : Math.max(now, previous.optLong("lastUsedMs", now));
+        try {
+            JSONObject record = new JSONObject().put("folderId", config.folderId).put("lastUsedMs", lastUsed)
+                    .put("retentionDays", config.cacheRetentionDays);
+            prefs.edit().putString(key, record.toString()).remove(config.folderId + ":legacy").apply();
+        } catch (org.json.JSONException impossible) { throw new IllegalStateException(impossible); }
+    }
+    private static JSONObject usage(Object value) {
+        if (!(value instanceof String)) return null;
+        try {
+            JSONObject record = new JSONObject((String) value);
+            return record.optLong("lastUsedMs", -1) >= 0 && record.optInt("retentionDays", 0) > 0 ? record : null;
+        } catch (org.json.JSONException ignored) { return null; }
+    }
+
+    /** Keep shared source bytes while ANY theme has a live lease; never evict early to make space. */
+    static synchronized void evictExpired(Context context, DriveConfig active, DriveImageRepository.Check check, long now) throws Exception {
+        File[] partitions = root(context).listFiles();
+        if (partitions == null) return;
+        android.content.SharedPreferences prefs = context.getSharedPreferences(USAGE_PREFS, Context.MODE_PRIVATE);
+        Map<String, ?> records = prefs.getAll();
+        for (File partition : partitions) {
+            if (!partition.isDirectory() || !partition.getName().matches("[A-Za-z0-9_-]+")
+                    || partition.equals(directory(context, active))) continue;
+            check.check();
+            boolean known = false, protectedByTheme = false;
+            for (Map.Entry<String, ?> entry : records.entrySet()) {
+                JSONObject record = usage(entry.getValue());
+                if (record == null || !partition.getName().equals(record.optString("folderId"))) continue;
+                known = true;
+                long lastUsed = record.getLong("lastUsedMs");
+                long retention = record.getLong("retentionDays") * DAY_MS;
+                if (now < lastUsed || now - lastUsed < retention) protectedByTheme = true;
+            }
+            if (!known) {
+                // Upgrade: no reliable usage timestamp exists. Start a conservative 30-day grace period.
+                JSONObject grace = new JSONObject().put("folderId", partition.getName()).put("lastUsedMs", now).put("retentionDays", 30);
+                prefs.edit().putString(partition.getName() + ":legacy", grace.toString()).apply();
+                continue;
+            }
+            if (!protectedByTheme) {
+                check.check();
+                remove(partition);
+                if (!partition.exists()) {
+                    android.content.SharedPreferences.Editor edit = prefs.edit();
+                    for (Map.Entry<String, ?> entry : records.entrySet()) {
+                        JSONObject record = usage(entry.getValue());
+                        if (record != null && partition.getName().equals(record.optString("folderId"))) edit.remove(entry.getKey());
+                    }
+                    edit.apply();
+                    DriveLog.event("stage=cache expired inactive source removed; retention elapsed");
+                }
+            }
+        }
+    }
+
     static boolean validThemePath(String path) {
         if ("wallpaper.jpg".equals(path) || CAPTIONS_PATH.equals(path)) return true;
         if (!path.startsWith("wallpapers/")) return false;
@@ -179,8 +245,7 @@ final class DriveImageCache {
             if (file != null && file.isFile()) old.put(item.getString("id"), item);
         }
         prune(dir, previousManifest.optString("snapshot"));
-        File[] partitions = root(context).listFiles();
-        if (partitions != null) for (File partition : partitions) if (!partition.equals(dir)) { check.check(); remove(partition); }
+        evictExpired(context, config, check, System.currentTimeMillis());
         boolean unchanged = before != null && old.size() == remote.size() && before.length() == remote.size();
         for (JSONObject item : remote) {
             JSONObject previous = old.get(item.getString("id"));

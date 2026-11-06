@@ -57,6 +57,7 @@ final class WallpaperPlayer {
     private boolean loading;
     private String displayed = "";
     private String displayedPath = "";
+    private long driveUseRecordedAt;
     /** wallpaper_captions: the shown picture's name from wallpapers/captions.txt; null when off or there are none. */
     private final TextView caption;
     private Map<String, String> names;
@@ -149,6 +150,7 @@ final class WallpaperPlayer {
     }
 
     void stop() {
+        if (active) DriveImageCache.markUsed(context, drive);
         DriveSync.unlisten(driveChanged);
         active = false;
     }
@@ -203,6 +205,13 @@ final class WallpaperPlayer {
     }
 
     void update() {
+        if (active && !closed) {
+            long now = System.currentTimeMillis();
+            if (driveUseRecordedAt == 0 || now < driveUseRecordedAt || now - driveUseRecordedAt >= 3600000L) {
+                DriveImageCache.markUsed(context, drive);
+                driveUseRecordedAt = now;
+            }
+        }
         if (!active || closed || loading || files.isEmpty()) return;
         String previous = preferences.getString("image", "");
         // A picture outside the time of day's group (the group changed) is replaced at once, not after the interval.

@@ -21,6 +21,9 @@ def validate(theme):
     interval = drive.get("syncInterval", 360)
     if type(interval) is not int or not 0 <= interval <= 2147483647:
         raise ValueError("googleDrive.syncInterval must be a nonnegative integer in minutes")
+    retention = drive.get("cacheRetentionDays", 30)
+    if type(retention) is not int or not 1 <= retention <= 2147483647:
+        raise ValueError("googleDrive.cacheRetentionDays must be a positive integer in days")
     if "syncOnLaunch" in drive and type(drive["syncOnLaunch"]) is not bool:
         raise ValueError("googleDrive.syncOnLaunch must be boolean")
 
