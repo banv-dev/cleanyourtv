@@ -25,12 +25,12 @@ Các giá trị này được đóng gói trong APK; sau khi sửa cần build v
     <!-- Khoảng thời gian giữa các lần đồng bộ định kỳ của theme đang chọn, đơn vị phút.
          0 = tắt đồng bộ định kỳ; giá trị dương dưới 15 được Android nâng lên tối thiểu 15 phút.
          Thời điểm chạy thực tế có thể trễ do điều kiện mạng hoặc chế độ tiết kiệm điện. -->
-    <integer name="drive_sync_interval">5</integer>
+    <integer name="drive_sync_interval">360</integer>
     <!-- true = yêu cầu đồng bộ nền mỗi lần mở Home với theme Drive đang được chọn.
          false = không tự đồng bộ khi mở Home; lịch định kỳ và nút Sync now vẫn hoạt động.
          Chọn một theme chưa có snapshot cache trong Settings vẫn yêu cầu tải ban đầu,
          kể cả khi setting này là false. Các lần đồng bộ thông thường không hiện progress Toast. -->
-    <bool name="drive_sync_on_launch">true</bool>
+    <bool name="drive_sync_on_launch">false</bool>
     <!-- Số ngày không sử dụng trước khi cache của một theme không còn được chọn có thể bị xóa.
          Phải là số nguyên dương; mở hoặc sử dụng theme sẽ cập nhật thời điểm sử dụng gần nhất.
          Đồng bộ nền không gia hạn thời gian này; cache theme đang chọn luôn được bảo vệ.
