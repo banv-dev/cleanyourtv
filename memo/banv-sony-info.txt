@@ -1,0 +1,16 @@
+tools/venv/bin/python -I tools/tv.py --probe
+ro.product.model = BRAVIA 4K UR2
+ro.product.device = BRAVIA_UR2_4K
+ro.build.version.release = 10
+ro.build.version.sdk = 29
+ro.build.display.id = BRAVIA_UR2_4K_PA-user 10 QTG3.200305.006.S97 662301 release-keys
+ro.product.manufacturer = Sony
+ro.adb.secure = 1
+service.adb.tcp.port = 5555
+
+
+
+
+ adb shell wm size
+
+Physical size: 1920x1080
