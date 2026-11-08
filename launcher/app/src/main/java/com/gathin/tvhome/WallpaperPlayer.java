@@ -279,7 +279,8 @@ final class WallpaperPlayer {
         }
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.END);
-        params.topMargin = Math.round(110 * dp);
+        // Match Home's greeting row, above the top-right buttons (also used by My Collection).
+        params.topMargin = Math.round(26 * dp);
         params.setMarginEnd(Math.round(62 * dp));
         root.addView(text, params);
         return text;
