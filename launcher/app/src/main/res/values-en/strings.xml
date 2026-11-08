@@ -130,4 +130,5 @@
     <string name="drive_theme_empty">No theme subfolders found.</string>
     <string name="drive_theme_load_error">Cannot load themes. Check network and Drive sharing.</string>
     <string name="drive_theme_cached_catalog">Using the saved Drive theme list.</string>
+    <string name="start_screen_saver">Start screensaver</string>
 </resources>

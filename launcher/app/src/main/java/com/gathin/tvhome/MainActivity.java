@@ -862,6 +862,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         btnInputs = findViewById(R.id.btnInputs);
         View btnSettings = findViewById(R.id.btnSettings);
+        View btnScreenSaver = findViewById(R.id.btnScreenSaver);
+        btnScreenSaver.setVisibility(cfg.screenSaverButton ? View.VISIBLE : View.GONE);
+        btnScreenSaver.setOnClickListener(v -> RemoteKeys.launch(this, "screensaver"));
         btnInputs.setOnClickListener(v -> showInputs());
         btnWifi.setOnClickListener(v -> openNetworkPill());
         btnVpn.setOnClickListener(v -> openVpnPill());
@@ -961,12 +964,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (btnWifi != null) btnWifi.setOnKeyListener(pillKeys);
         if (btnVpn != null) btnVpn.setOnKeyListener(pillKeys);
         if (btnNotifications != null) btnNotifications.setOnKeyListener(pillKeys);
+        btnScreenSaver.setOnKeyListener(pillKeys);
         if (btnSettings != null) btnSettings.setOnKeyListener(pillKeys);
         if (btnReorder != null) btnReorder.setOnKeyListener(pillKeys);
         if (btnLibraryTop != null) btnLibraryTop.setOnKeyListener(pillKeys);
         for (View button : topAppButtons) button.setOnKeyListener(pillKeys);
         if (advancedEffects) {
-            List<View> pills = new ArrayList<>(Arrays.asList(btnSearch, btnInputs, btnWifi, btnVpn, btnNotifications, btnReorder, btnLibraryTop, btnSettings));
+            List<View> pills = new ArrayList<>(Arrays.asList(btnSearch, btnInputs, btnWifi, btnVpn, btnNotifications, btnReorder, btnLibraryTop, btnScreenSaver, btnSettings));
             pills.removeIf(button -> button == null);
             pills.addAll(topAppButtons);
             for (View button : pills) {
